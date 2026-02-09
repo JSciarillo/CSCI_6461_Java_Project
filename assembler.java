@@ -8,34 +8,49 @@
 
 import java.io.File;
 import java.io.IOException;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 
 public class Assembler {
     private String sourceFile = "SourceFile.txt";
     private String listeningOutput = "listeningOutput.txt";
     private String loadFile = "loadFile.txt";
-    
-    // Misc Instructions
-    // Load/Store Instructions
-    // Transfer Instructions
-    // Arithemtic and Logical Instructions
-    // I/O Operations
-    // Floating Point Instructions/Vector Operations
+    private List<String> sourceCode = new ArrayList<String>();
+    private Map<String, Integer> symbolTable = new HashMap<String, Integer>();
+    private Integer curAddr = 0;
 
-    private void passOne(String sourceFile) throws IOException {
-        System.out.println("Executing Pass One...");
+    private void passOne(String sourceFile) throws IOException {        
+        String line;
+        BufferedReader reader = new BufferedReader(new FileReader(sourceFile));
+        
         // 1. Set code location to 0
-
         // 2. Read a line of the file
+        while((line = reader.readLine()) != null) {
+            // 3. Use the split command to break the line into its parts 
+            sourceCode.add(line);
+            String[] tokens = line.trim().split("\\s+");
 
-        // 3. Use the split command to break the line into its parts 
+            /**
+             *  4. Process the line, if it is a label, add the label to a 
+             *  dictionary with the code location. Process the rest of 
+             *  the line (it could be blank, if so no code is generated). 
+             */  
+            if (tokens[0].endsWith(":")) {
+                String label = tokens[0].substring(0, tokens[0].length() - 1);
+                symbolTable.put(label, curAddr);
+            }
 
-        // 4. Process the line, if it is a label, add the label to a 
-        //      dictionary with the code location. Process the rest of 
-        //      the line (it could be blank, if so no code is generated). 
-        //      Check for errors in the code. 
-
-        // 5. If code or data was generated increment the code location 
-        //      and go to step 2 until termination. 
+            // 5. If code or data was generated increment the code location 
+            //      and go to step 2 until termination. 
+            curAddr++;
+        }
+        reader.close();
     }
 
     private void passTwo(String sourceFile) throws IOException {
@@ -67,5 +82,7 @@ public class Assembler {
     public static void main(String[] args) {
         System.out.println("Running tests...");
         // Assembler logic here
+        Assembler assembler = new Assembler();
+        assembler.assemble("source_file.txt");
     }
 }
