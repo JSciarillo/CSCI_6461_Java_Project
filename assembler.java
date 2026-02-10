@@ -12,45 +12,126 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.FileReader;
 import java.io.FileWriter;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 public class Assembler {
-    private String sourceFile = "SourceFile.txt";
-    private String listeningOutput = "listeningOutput.txt";
-    private String loadFile = "loadFile.txt";
-    private List<String> sourceCode = new ArrayList<String>();
-    private Map<String, Integer> symbolTable = new HashMap<String, Integer>();
-    private Integer curAddr = 0;
+    private int lc = 0; // code location counter
+    private final Map<String, Integer> symtab = new HashMap<String, Integer>();
+
+    private final List<String> sourceCode = new ArrayList<>();
+    private final List<Integer> addrByLine = new ArrayList<>();
+    private final List<String> passOneErrors = new ArrayList<>();
+
+    private static final Set<String> ISA_OPCODES = new HashSet<>(Arrays.asList(
+        // Mescellaneous Instructions
+        "HLT", "TRAP",
+        // Load/Store Instructions
+        "LDR", "STR", "LDA", "LDX", "STX",
+        // Transfer Instructions
+        "JZ", "JNE", "JCC", "JMA", "JSR", "RFS", "SOB", "JGE",
+        // Arithmetic and Logical Instructions
+        "AMR", "SMR", "AIR", "SIR", "MLT", "DVD", "TRR", "AND", "ORR", "NOT", "SRC", "RRC",
+        // I/O Operations
+        "IN", "OUT", "CHK",
+        // Floating Point Instructions
+        "FADD", "FSUB", "VADD", "VSUB", "CNVRT", "LDFR", "STFR"
+    ));
 
     private void passOne(String sourceFile) throws IOException {        
-        String line;
-        BufferedReader reader = new BufferedReader(new FileReader(sourceFile));
-        
-        // 1. Set code location to 0
-        // 2. Read a line of the file
-        while((line = reader.readLine()) != null) {
-            // 3. Use the split command to break the line into its parts 
-            sourceCode.add(line);
-            String[] tokens = line.trim().split("\\s+");
+        lc = 0; // 1. Set code location to 0
+        sourceCode.clear();
+        addrByLine.clear();
+        passOneErrors.clear();
+        symtab.clear();
 
-            /**
-             *  4. Process the line, if it is a label, add the label to a 
-             *  dictionary with the code location. Process the rest of 
-             *  the line (it could be blank, if so no code is generated). 
-             */  
-            if (tokens[0].endsWith(":")) {
-                String label = tokens[0].substring(0, tokens[0].length() - 1);
-                symbolTable.put(label, curAddr);
+        try (BufferedReader reader = new BufferedReader(new FileReader(sourceFile))) {
+            String raw;
+            int lineNo = 0;
+
+            // 2. Read a line of the file
+            while ((raw = reader.readLine()) != null) {
+                lineNo++;
+                sourceCode.add(raw);
+
+                // Strip comments
+                String line = raw;
+                int semi = line.indexOf(';');
+                if (semi >= 0) line = line.substring(0, semi);
+                line = line.trim();
+
+                if (line.isEmpty()) { 
+                    addrByLine.add(null);
+                    continue; 
+                }
+
+                // 3. Use split to break the line into parts
+                String[] tokens = line.split("\\s+");
+                int i = 0;
+
+                // 4a. If it is a label, add to dictionary with code location
+                if(tokens[i].endsWith(":")) {
+                    String label = tokens[i].substring(0, tokens[i].length() - 1);
+                    String key = label.toUpperCase(Locale.ROOT);
+
+                    if (!key.matches("[A-Z_][A-Z0-9_]*")) {
+                        passOneErrors.add("Line " + lineNo + ": Invalid label '" + label + "'");
+                    } else if (symtab.containsKey(key)) {
+                        passOneErrors.add("Line " + lineNo + ": Duplicate label '" + label + "'");
+                    } else {
+                        symtab.put(key, lc);
+                    }
+
+                    i++;
+                }
+
+                if (i >= tokens.length) {
+                    addrByLine.add(null);
+                    continue;
+                }
+
+                String op = tokens[i].toUpperCase(Locale.ROOT);
+
+                // LOC n => sets LC, no word generated
+                if(op.equals("LOC")) {
+                    if (i + 1 >= tokens.length) {
+                        passOneErrors.add("Line " + lineNo + ": LOC missing operand");
+                        addrByLine.add(null);
+                        continue;
+                    }
+                    String nStr = tokens[i + 1];
+                    try {
+                        int newLc = Integer.parseInt(nStr, 10);
+                        lc = newLc;
+                    } catch (NumberFormatException ex) {
+                        passOneErrors.add("Line " + lineNo + ": LOC operand must be decimal, got '" + nStr + "'");
+                    }
+                    addrByLine.add(null);
+                    continue;
+                }
+
+                // Data x => allocates 1 word at LC, then LC++
+                if (op.equals("DATA")) {
+                    addrByLine.add(lc);
+                    
+                    if (i + 1 >= tokens.length) {
+                        passOneErrors.add("Line " + lineNo + ": Data missing operand");
+                    }
+
+                    lc += 1;
+                    continue;
+                }
+
+                if (ISA_OPCODES.contains(op)) {
+                    addrByLine.add(lc);
+                    lc += 1;
+                    continue;
+                }
+
+                // Unknown operation
+                passOneErrors.add("Line " + lineNo + ": Unknown opcode/directive '" + op + "'");
+                addrByLine.add(null);
             }
-
-            // 5. If code or data was generated increment the code location 
-            //      and go to step 2 until termination. 
-            curAddr++;
         }
-        reader.close();
     }
 
     private void passTwo(String sourceFile) throws IOException {
@@ -69,10 +150,27 @@ public class Assembler {
         //      go to step2 until termination. 
     }
 
+    public void debugPrintPassOne() {
+        System.out.println("SYMTAB:");
+        for (var e : symtab.entrySet()) {
+            System.out.println("  " + e.getKey() + " = " + e.getValue());
+        }
+        System.out.println("\nADDR BY LINE:");
+        for (int i = 0; i < sourceCode.size(); i++) {
+            System.out.printf("%3d  %6s  %s%n",
+                    (i + 1),
+                    (addrByLine.get(i) == null ? "------" : addrByLine.get(i).toString()),
+                    sourceCode.get(i));
+        }
+        System.out.println("\nPASS1 ERRORS:");
+        for (String err : passOneErrors) System.out.println("  " + err);
+    }
+
     public void assemble(String sourceFile) {
-        this.sourceFile = sourceFile;
         try {
             passOne(sourceFile);
+            // DEBUG
+            debugPrintPassOne();
             passTwo(sourceFile);
         } catch (IOException e) {
             System.out.println("Error during assembly: " + e.getMessage());
