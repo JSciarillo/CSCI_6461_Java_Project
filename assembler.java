@@ -71,11 +71,9 @@ public class Assembler {
                 // 4a. If it is a label, add to dictionary with code location
                 if(tokens[i].endsWith(":")) {
                     String label = tokens[i].substring(0, tokens[i].length() - 1);
-                    String key = label.toUpperCase(Locale.ROOT);
+                    String key = label;
 
-                    if (!key.matches("[A-Z_][A-Z0-9_]*")) {
-                        passOneErrors.add("Line " + lineNo + ": Invalid label '" + label + "'");
-                    } else if (symtab.containsKey(key)) {
+                    if (symtab.containsKey(key)) {
                         passOneErrors.add("Line " + lineNo + ": Duplicate label '" + label + "'");
                     } else {
                         symtab.put(key, lc);
@@ -146,15 +144,59 @@ public class Assembler {
             String raw = sourceCode.get(i);
             Integer addr = addrByLine.get(i);
 
+            System.out.println(raw);
+            System.out.println(addr);
+            
+            if (addr != null){
+                System.out.println(toOctal(addr));
+            }
+            
+            String line = raw;
+            int semi = line.indexOf(';');
+            if (semi >= 0) line = line.substring(0, semi);
+            line = line.trim();
+
+            String[] tokens = line.split("\\s+");
+            String op = tokens[0].toUpperCase(Locale.ROOT);
+            
+            // Data
+            if(op.equals("DATA")) {
+                String arg = tokens[1];
+                String octalArg = null;
+
+                // If arg is addr, normally convert
+                if(isInteger(arg)){
+                    octalArg = toOctal(Integer.parseInt(arg));
+                }
+
+                // If not, check symtab for lable location
+                if(symtab.containsKey(arg)){
+                    octalArg = toOctal(symtab.get(arg));
+                }
+
+                System.out.println(octalArg);
+            }
+
+
+
+
+
+
+
+
+
+
+
             //Write line to listing file
             //If no address, skip processing
-            if (addr == null) {
-                listing.write("      " + raw + "\n");
-                continue;
-            }
+            //listing.write("      " + raw + "\n");
+
             // 3. Use the split command to break the line into it parts 
 
             // 4. Convert the code according to the second field.
+
+
+
 
             // 5. Add line to listing file and to load file. 
 
@@ -164,6 +206,22 @@ public class Assembler {
 
         }
 
+    }
+
+    public static boolean isInteger(String str) {
+        if (str == null) { // Handle null input
+            return false;
+        }
+        try {
+            Integer.parseInt(str);
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+
+    public String toOctal(Integer num){
+        return String.format("%06d", Integer.parseInt(Integer.toOctalString(num)));
     }
 
     public void debugPrintPassOne() {
