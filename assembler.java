@@ -134,20 +134,36 @@ public class Assembler {
         }
     }
 
-    private void passTwo(String sourceFile) throws IOException {
+    private void passTwo(String listingFile, String loadFile) throws IOException {
         System.out.println("Executing Pass Two...");
         // 1. Set code location to 0
+        
+        BufferedWriter listing = new BufferedWriter(new FileWriter(listingFile));
+        BufferedWriter load = new BufferedWriter(new FileWriter(loadFile));
 
         // 2. Read a line of the file 
+        for (int i = 0; i < sourceCode.size(); i++) {
+            String raw = sourceCode.get(i);
+            Integer addr = addrByLine.get(i);
 
-        // 3. Use the split command to break the line into it parts 
+            //Write line to listing file
+            //If no address, skip processing
+            if (addr == null) {
+                listing.write("      " + raw + "\n");
+                continue;
+            }
+            // 3. Use the split command to break the line into it parts 
 
-        // 4. Convert the code according to the second field. 
+            // 4. Convert the code according to the second field.
 
-        // 5. Add line to listing file and to load file. 
+            // 5. Add line to listing file and to load file. 
 
-        // 6. If code or data generated, increment the code counter, and 
-        //      go to step2 until termination. 
+            // 6. If code or data generated, increment the code counter, and 
+            //    go to step2 until termination. 
+
+
+        }
+
     }
 
     public void debugPrintPassOne() {
@@ -171,7 +187,7 @@ public class Assembler {
             passOne(sourceFile);
             // DEBUG
             debugPrintPassOne();
-            passTwo(sourceFile);
+            passTwo("Listing.txt", "Load.txt");
         } catch (IOException e) {
             System.out.println("Error during assembly: " + e.getMessage());
         }
