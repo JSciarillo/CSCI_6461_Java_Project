@@ -2,7 +2,7 @@
  * Assembler.java
  * 
  * Processes incoming source files and converts them into two output
- *  files via a two pass process: "Listening.txt" and "Load.txt"
+ *  files via a two pass process: "Listing.txt" and "Load.txt"
 */
 
 
@@ -15,7 +15,7 @@ import java.io.FileWriter;
 import java.util.*;
 
 public class Assembler {
-    private int lc = 0; // code location counter
+    private int lc = 0; //code location counter
     private final Map<String, Integer> symtab = new HashMap<String, Integer>();
 
     private final List<String> sourceCode = new ArrayList<>();
@@ -23,13 +23,13 @@ public class Assembler {
     private final List<String> passOneErrors = new ArrayList<>();
 
     private static final Set<String> ISA_OPCODES = new HashSet<>(Arrays.asList(
-        // Mescellaneous Instructions
+        // Miscellaneous Instructions
         "HLT", "TRAP",
         // Load/Store Instructions
         "LDR", "STR", "LDA", "LDX", "STX",
         // Transfer Instructions
         "JZ", "JNE", "JCC", "JMA", "JSR", "RFS", "SOB", "JGE",
-        // Arithmetic and Logical Instructions
+        // Arithmetic & Logical Instructions
         "AMR", "SMR", "AIR", "SIR", "MLT", "DVD", "TRR", "AND", "ORR", "NOT", "SRC", "RRC",
         // I/O Operations
         "IN", "OUT", "CHK",
@@ -38,7 +38,7 @@ public class Assembler {
     ));
 
     private void passOne(String sourceFile) throws IOException {        
-        lc = 0; // 1. Set code location to 0
+        lc = 0; // Set code location to 0
         sourceCode.clear();
         addrByLine.clear();
         passOneErrors.clear();
@@ -48,7 +48,7 @@ public class Assembler {
             String raw;
             int lineNo = 0;
 
-            // 2. Read a line of the file
+            // Read a line of the file
             while ((raw = reader.readLine()) != null) {
                 lineNo++;
                 sourceCode.add(raw);
@@ -64,11 +64,11 @@ public class Assembler {
                     continue; 
                 }
 
-                // 3. Use split to break the line into parts
+                // Use split to break the line into parts
                 String[] tokens = line.split("\\s+");
                 int i = 0;
 
-                // 4a. If it is a label, add to dictionary with code location
+                // If it is a label, add to dictionary with code location
                 if(tokens[i].endsWith(":")) {
                     String label = tokens[i].substring(0, tokens[i].length() - 1);
                     String key = label;
@@ -136,7 +136,7 @@ public class Assembler {
         System.out.println("Executing Pass Two...");
         // 1. Set code location to 0
         
-        BufferedWriter listing = new BufferedWriter(new FileWriter(listingFile));
+        BufferedWriter list = new BufferedWriter(new FileWriter(listingFile));
         BufferedWriter load = new BufferedWriter(new FileWriter(loadFile));
 
         // 2. Read a line of the file 
@@ -144,11 +144,11 @@ public class Assembler {
             String raw = sourceCode.get(i);
             Integer addr = addrByLine.get(i);
 
-            System.out.println(raw);
-            System.out.println(addr);
             
-            if (addr != null){
-                System.out.println(toOctal(addr));
+            //If there is no address, skip processing, write line to listing file
+            if (addr == null){
+                list.write("      " + raw + "\n");
+                continue;
             }
             
             String line = raw;
@@ -156,61 +156,216 @@ public class Assembler {
             if (semi >= 0) line = line.substring(0, semi);
             line = line.trim();
 
+            // 3.Use the split command to break the line into parts 
             String[] tokens = line.split("\\s+");
-            String op = tokens[0].toUpperCase(Locale.ROOT);
+            //token index
+            int t = 0;
+
+            //Skip if : is present
+            if (tokens[t].endsWith(":")) {
+                t++;
+            }
+
+            //Retrieve opcode
+            String op = tokens[t].toUpperCase(Locale.ROOT);
+            t++;
+
+            // 4. Convert the code according to the second field.
+            int word = 0;
             
             // Data
             if(op.equals("DATA")) {
-                String arg = tokens[1];
-                String octalArg = null;
+                String arg = tokens[t];
+                //String octalArg = null;
 
                 // If arg is addr, normally convert
-                if(isInteger(arg)){
-                    octalArg = toOctal(Integer.parseInt(arg));
-                }
+                // if(isInteger(arg)){
+                //     octalArg = toOctal(Integer.parseInt(arg));
+                // }
 
                 // If not, check symtab for lable location
                 if(symtab.containsKey(arg)){
-                    octalArg = toOctal(symtab.get(arg));
+                    word = symtab.get(arg);
                 }
-
-                System.out.println(octalArg);
+                else {
+                    word = Integer.parseInt(arg);
+                }
             }
 
-
-
-
-
-
-
-
-
-
-
-            //Write line to listing file
-            //If no address, skip processing
-            //listing.write("      " + raw + "\n");
-
-            // 3. Use the split command to break the line into it parts 
-
-            // 4. Convert the code according to the second field.
-
-
-
+                
+            else {
+                String operands = t < tokens.length ? tokens[t] : "";
+                word = encodeInstruction(op, operands);
+            }
 
             // 5. Add line to listing file and to load file. 
+            String octalAddr = String.format("%06o", addr);
+            String octalWord = String.format("%06o", word & 0xFFFF);
 
+            list.write(octalAddr + "  " + octalWord + "  " + raw + "\n");
+            load.write(octalAddr + "  " + octalWord + "\n");
             // 6. If code or data generated, increment the code counter, and 
-            //    go to step2 until termination. 
+            // go to step2 until termination. (for loop)
+            }
 
-
+        list.close();
+        load.close();
         }
 
+    private int getOpcode(String op) {
+        switch(op) {
+            case "HLT": return 00;
+            case "TRAP": return 030;
+            case "LDR": return 01;
+            case "STR": return 02;
+            case "LDA": return 03;
+            case "LDX": return 041;
+            case "STX": return 042;
+            case "JZ": return 010;
+            case "JNE": return 011;
+            case "JCC": return 012;
+            case "JMA": return 013;
+            case "JSR": return 014;
+            case "RFS": return 015;
+            case "SOB": return 016;
+            case "JGE": return 017;
+            case "AMR": return 04;
+            case "SMR": return 05;
+            case "AIR": return 06;
+            case "SIR": return 07;
+            case "MLT": return 070;
+            case "DVD": return 071;
+            case "TRR": return 072;
+            case "AND": return 073;
+            case "ORR": return 074;
+            case "NOT": return 075;
+            case "SRC": return 031;
+            case "RRC": return 032;
+            case "IN": return 061;
+            case "OUT": return 062;
+            case "CHK": return 063;
+            case "FADD": return 033;
+            case "FSUB": return 034;
+            case "VADD": return 035;
+            case "VSUB": return 036;
+            case "CNVRT": return 037;
+            case "LDFR": return 050;
+            case "STFR": return 051;
+            default: return -1;
+        }
     }
 
+    private int encodeInstruction(String op, String operands) {
+        int opcode = getOpcode(op);
+
+        String[] parts = operands.isEmpty() ? new String[0] : operands.split(",");
+        
+        switch (op){
+            case "HLT":
+                return 0;
+
+            case "LDR":
+            case "STR":
+            case "LDA":
+            case "AMR":
+            case "SMR":
+            case "JZ":
+            case "JNE":
+            case "JCC":
+            case "JGE":
+            case "SOB": {
+                int r = Integer.parseInt(parts[0].trim());
+                int x = Integer.parseInt(parts[1].trim());
+                int addr = Integer.parseInt(parts[2].trim());
+                int indx = (parts.length > 3 && parts[3].trim().equals("1")) ? 1 : 0;
+                return (opcode << 10) | (r << 8) | (x << 6) | (indx << 5) | (addr & 0x1F);
+            }
+            case "LDX":
+            case "STX":
+            case "JMA":
+            case "JSR": {
+                int ix = Integer.parseInt(parts[0].trim());
+                int addr = Integer.parseInt(parts[1].trim());
+                int indx = (parts.length > 2 && parts[2].trim().equals("1")) ? 1 : 0;
+                return (opcode << 10) | (ix << 6) | (indx << 5) | (addr & 0x1F);
+            }
+
+            case "RFS": {
+                int immediate = parts.length > 0 ? Integer.parseInt(parts[0].trim()) : 0;
+                return (opcode << 10) | (immediate & 0x1F);
+            }
+
+            case "AIR":
+            case "SIR": {
+                int r = Integer.parseInt(parts[0].trim());
+                int immediate = Integer.parseInt(parts[1].trim());
+                return (opcode << 10) | (r << 8) | (immediate & 0x1F);
+            }
+
+            case "MLT":
+            case "DVD":
+            case "TRR":
+            case "AND":
+            case "ORR":
+                int rx = Integer.parseInt(parts[0].trim());
+                int ry = Integer.parseInt(parts[1].trim());
+                return (opcode << 10) | (rx << 8) | (ry << 6);
+
+            case "NOT":
+                int r = Integer.parseInt(parts[0].trim());
+                return (opcode << 10) | (r << 8);
+
+            case "SRC":
+            case "RRC": {
+                int x = Integer.parseInt(parts[0].trim());
+                int count = Integer.parseInt(parts[1].trim());
+                int lr = Integer.parseInt(parts[2].trim());
+                int al = Integer.parseInt(parts[3].trim());
+                return (opcode << 10) | (x << 8) | (al << 7) | (lr << 6) |(count & 0xF);
+            }
+
+            case "TRAP": {
+                int code = Integer.parseInt(parts[0].trim());
+                return (opcode << 10) | (code & 0xF);
+
+            }
+            
+            case "FADD":
+            case "FSUB":
+            case "VADD":
+            case "VSUB":
+            case "CNVRT": 
+            case "LDFR":
+            case "STFR": {
+                int ri = Integer.parseInt(parts[0].trim());
+                int ix = Integer.parseInt(parts[1].trim());
+                int addr = Integer.parseInt(parts[2].trim());
+                int indx = (parts.length > 3 && parts[3].trim().equals("1")) ? 1 : 0;
+                return (opcode << 10) | (ri << 8) | (ix << 6) | (indx << 5) | (addr & 0x1F);
+            }
+
+            case "IN":
+            case "OUT":
+            case "CHK": {
+                int rj = Integer.parseInt(parts[0].trim());
+                int devid = Integer.parseInt(parts[1].trim());
+                return (opcode << 10) | (rj << 8) | (devid & 0x1F);
+            }
+
+            default:
+                System.out.println("Opcode Invalid: " + op);
+                return 0;
+        }
+    }
+
+
+    
+
+
     public static boolean isInteger(String str) {
-        if (str == null) { // Handle null input
-            return false;
+        //For null input
+        if (str == null) 
+            return false;{ 
         }
         try {
             Integer.parseInt(str);
@@ -236,7 +391,7 @@ public class Assembler {
                     (addrByLine.get(i) == null ? "------" : addrByLine.get(i).toString()),
                     sourceCode.get(i));
         }
-        System.out.println("\nPASS1 ERRORS:");
+        System.out.println("\nPASS1 Errors:");
         for (String err : passOneErrors) System.out.println("  " + err);
     }
 
