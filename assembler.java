@@ -411,5 +411,7 @@ public class Assembler {
         // Assembler logic here
         Assembler assembler = new Assembler();
         assembler.assemble("source_file.txt");
+        //Simple test case
+        assembler.assemble("testfile.txt");
     }
 }
