@@ -1,0 +1,10 @@
+
+        {
+            "java.configuration.runtimes": [
+                {
+                    "name": "JavaSE-25",
+                    "path": "C:/Users/Srikar Atluri/Desktop/jdk-25.0.2",
+                    "sources": "C:/Users/Srikar Atluri/Desktop/jdk-25.0.2/lib/src.zip"
+                }
+            ]
+        }
