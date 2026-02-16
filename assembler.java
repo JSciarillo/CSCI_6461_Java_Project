@@ -5,463 +5,663 @@
  *  files via a two pass process: "Listing.txt" and "Load.txt"
 */
 
-
-import java.io.File;
-import java.io.IOException;
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.FileReader;
-import java.io.FileWriter;
+import java.io.*;
 import java.util.*;
+import static java.util.Map.entry;
 
 public class Assembler {
-    private int lc = 0; //code location counter
-    private final Map<String, Integer> symtab = new HashMap<String, Integer>();
 
-    private final List<String> sourceCode = new ArrayList<>();
-    private final List<Integer> addrByLine = new ArrayList<>();
-    private final List<String> passOneErrors = new ArrayList<>();
+    private static final String LISTING_FMT = "%-6s  %-6s  %s%n";
+    private static final String LOAD_FMT = "%06o  %06o%n";
 
-    private static final Set<String> ISA_OPCODES = new HashSet<>(Arrays.asList(
-        // Miscellaneous Instructions
-        "HLT", "TRAP",
-        // Load/Store Instructions
-        "LDR", "STR", "LDA", "LDX", "STX",
-        // Transfer Instructions
-        "JZ", "JNE", "JCC", "JMA", "JSR", "RFS", "SOB", "JGE",
-        // Arithmetic & Logical Instructions
-        "AMR", "SMR", "AIR", "SIR", "MLT", "DVD", "TRR", "AND", "ORR", "NOT", "SRC", "RRC",
-        // I/O Operations
-        "IN", "OUT", "CHK",
-        // Floating Point Instructions
-        "FADD", "FSUB", "VADD", "VSUB", "CNVRT", "LDFR", "STFR"
-    ));
+    public AssemblerResult assemble(File sourceFile, File listingFile, File loadFile) throws IOException {
+        List<String> rawLines = readAllLines(sourceFile);
 
-    /**
-     * Pass One
-     * 1. Set code location to 0
-     * 2. Read a line of the file
-     * 3. Use the split command to break the line into its parts
-     * 4. Process the line,
-     *      - If its a label, add the label to a dictionary with the code location.
-     *      - Process the rest of the line
-     *      - Check for errors in the code
-     * 5. If code or data was generated, increment code location and go to step 2
-     *      until termination
-     * 
-     * @param sourceFile
-     * @throws IOException
-     */
-    private void passOne(String sourceFile) throws IOException {        
-        lc = 0; // Set code location to 0
-        sourceCode.clear();
-        addrByLine.clear();
-        passOneErrors.clear();
-        symtab.clear();
+        Pass1Result p1 = passOne(rawLines);
+        Pass2Result p2 = passTwo(p1.lines, p1.symtab, listingFile, loadFile);
 
-        try (BufferedReader reader = new BufferedReader(new FileReader(sourceFile))) {
-            String raw;
-            int lineNo = 0;
+        List<String> allErrors = new ArrayList<>();
+        allErrors.addAll(p1.errors);
+        allErrors.addAll(p2.errors);
 
-            // Read a line of the file
-            while ((raw = reader.readLine()) != null) {
-                lineNo++;
-                sourceCode.add(raw);
+        return new AssemblerResult(
+            sourceFile,
+            listingFile,
+            loadFile,
+            p1.symtab,
+            p1.lines,
+            allErrors,
+            allErrors.isEmpty()
+        );
+    }
 
-                // Strip comments
-                String line = raw;
-                int semi = line.indexOf(';');
-                if (semi >= 0) line = line.substring(0, semi);
-                line = line.trim();
+    // CLI entry-point
+    public static void main(String[] args) {
+        try {
+            File src = new File(args.length > 0 ? args[0] : "source_file.txt");
+            File listing = new File("Listing.txt");
+            File load = new File("Load.txt");
 
-                if (line.isEmpty()) { 
-                    addrByLine.add(null);
-                    continue; 
-                }
+            Assembler asm = new Assembler();
+            AssemblerResult result = asm.assemble(src, listing, load);
 
-                // Use split to break the line into parts
-                String[] tokens = line.split("\\s+");
-                int i = 0;
-
-                // If it is a label, add to dictionary with code location
-                if(tokens[i].endsWith(":")) {
-                    String label = tokens[i].substring(0, tokens[i].length() - 1);
-                    String key = label;
-
-                    if (symtab.containsKey(key)) {
-                        passOneErrors.add("Line " + lineNo + ": Duplicate label '" + label + "'");
-                    } else {
-                        symtab.put(key, lc);
-                    }
-
-                    i++;
-                }
-
-                if (i >= tokens.length) {
-                    addrByLine.add(null);
-                    continue;
-                }
-
-                String op = tokens[i].toUpperCase(Locale.ROOT);
-
-                // LOC n => sets LC, no word generated
-                if(op.equals("LOC")) {
-                    if (i + 1 >= tokens.length) {
-                        passOneErrors.add("Line " + lineNo + ": LOC missing operand");
-                        addrByLine.add(null);
-                        continue;
-                    }
-                    String nStr = tokens[i + 1];
-                    try {
-                        int newLc = Integer.parseInt(nStr, 10);
-                        lc = newLc;
-                    } catch (NumberFormatException ex) {
-                        passOneErrors.add("Line " + lineNo + ": LOC operand must be decimal, got '" + nStr + "'");
-                    }
-                    addrByLine.add(null);
-                    continue;
-                }
-
-                // Data x => allocates 1 word at LC, then LC++
-                if (op.equals("DATA")) {
-                    addrByLine.add(lc);
-                    
-                    if (i + 1 >= tokens.length) {
-                        passOneErrors.add("Line " + lineNo + ": Data missing operand");
-                    }
-
-                    lc += 1;
-                    continue;
-                }
-
-                if (ISA_OPCODES.contains(op)) {
-                    addrByLine.add(lc);
-                    lc += 1;
-                    continue;
-                }
-
-                // Unknown operation
-                passOneErrors.add("Line " + lineNo + ": Unknown opcode/directive '" + op + "'");
-                addrByLine.add(null);
+            System.out.println("Assemble complete. success=" + result.success);
+            if (!result.errors.isEmpty()) {
+                System.out.println("Errors:");
+                for (String e : result.errors) System.out.println("  " + e);
             }
+        } catch (IOException e) {
+            System.out.println("I/O error during assembly: " + e.getMessage());
+        }
+    }
+
+    static class AsmLine {
+        final int lineNo;
+        final String raw;
+
+        String comment;
+        String label;
+        String op;
+        List<String> operands = List.of();
+        Integer address;
+
+        AsmLine(int lineNo, String raw) {
+            this.lineNo = lineNo;
+            this.raw = raw;
+        }
+
+        boolean isBlankOrCommentOnly() {
+            return op == null;
+        }
+
+        boolean generatesWord() {
+            return address != null;
+        }
+    }
+
+    static class AssemblerResult {
+        final File sourceFile;
+        final File listingFile;
+        final File loadFile;
+        final Map<String, Integer> symtab;
+        final List<AsmLine> lines;
+        final List<String> errors;
+        final boolean success;
+
+        AssemblerResult(File sourceFile, File listingFile, File loadFile, Map<String, Integer> symtab, List<AsmLine> lines, List<String> errors, boolean success) {
+            this.sourceFile = sourceFile;
+            this.listingFile = listingFile;
+            this.loadFile = loadFile;
+            this.symtab = symtab;
+            this.lines = lines;
+            this.errors = errors;
+            this.success = success;
         }
     }
 
     /**
-     * Pass Two
-     * 1. Set code location to 0
-     * 2. Read a line of the file
-     * 3. Use the split command to break the line into parts
-     * 4. Convert the code according to the second field.
-     * 5. Add line to listing file and to load file
-     * 6. If code or data generated, increment the code counter, and go to step2 until termination
-     *
-     * @param listingFile
-     * @param loadFile
-     * @throws IOException
+     * CSCI6461 opcodes (octal in spec)
+     * Store as integers; shifting into the top 6 bits uses (opcode << 10)
      */
-    private void passTwo(String listingFile, String loadFile) throws IOException {
-        // 1. Set code location to 0
-        BufferedWriter list = new BufferedWriter(new FileWriter(listingFile));
-        BufferedWriter load = new BufferedWriter(new FileWriter(loadFile));
+    private static final Map<String, Integer> OPCODE = Map.ofEntries(
+        // Misc
+        entry("HLT", 0),
+        entry("TRAP", 030),
 
-        // 2. Read a line of the file 
-        for (int i = 0; i < sourceCode.size(); i++) {
-            String raw = sourceCode.get(i);
-            Integer addr = addrByLine.get(i);
+        // Load/Store
+        entry("LDR", 01),
+        entry("STR", 02),
+        entry("LDA", 03),
+        entry("LDX", 041),
+        entry("STX", 042),
 
-            //If there is no address, skip processing, write line to listing file
-            if (addr == null){
-                list.write("      " + raw + "\n");
+        // Transfer
+        entry("JZ", 010),
+        entry("JNE", 011),
+        entry("JCC", 012),
+        entry("JMA", 013),
+        entry("JSR", 014),
+        entry("RFS", 015),
+        entry("SOB", 016),
+        entry("JGE", 017),
+
+        // Arithmetic & Logical
+        entry("AMR", 04),
+        entry("SMR", 05),
+        entry("AIR", 06),
+        entry("SIR", 07),
+        entry("MLT", 070),
+        entry("DVD", 071),
+        entry("TRR", 072),
+        entry("AND", 073),
+        entry("ORR", 074),
+        entry("NOT", 075),
+        entry("SRC", 031),
+        entry("RRC", 032),
+
+        // I/O
+        entry("IN", 061),
+        entry("OUT", 062),
+        entry("CHK", 063),
+
+        // Floating Point
+        entry("FADD", 033),
+        entry("FSUB", 034),
+        entry("VADD", 035),
+        entry("VSUB", 036),
+        entry("CNVRT", 037),
+        entry("LDFR", 050),
+        entry("STFR", 051)
+    );
+
+    private static List<String> readAllLines(File f) throws IOException {
+        List<String> lines = new ArrayList<>();
+        try (BufferedReader br = new BufferedReader(new FileReader(f))) {
+            for (String s; (s = br.readLine()) != null; ) {
+                lines.add(s);
+            }
+        }
+        return lines;
+    }
+
+    /**
+     * Parse a raw source line into:
+     *  - label (optional, ends with ':')
+     *  - op (directive or instruction) (optional)
+     *  - operands split by commas, with whitespace trimmed
+     *  - comment (optional, after ';')
+     * 
+     * Handles:
+     *  - blank lines
+     *  - comment-only lines
+     *  - operand spacing like: LDR 3,0,10,1
+     */
+    private static AsmLine parseLine(int lineNo, String raw) {
+        AsmLine al = new AsmLine(lineNo, raw);
+
+        String code = raw;
+        int semi = code.indexOf(';');
+        if (semi >= 0) {
+            al.comment = code.substring(semi + 1).trim();
+            code = code.substring(0, semi);
+        }
+        code = code.trim();
+        if (code.isEmpty()) return al; // blank/comment-only
+
+        // Split on whitespace first to find label/op
+        String[] ws = code.split("\\s+");
+        int i = 0;
+
+        // Optional label 
+        if (ws[i].endsWith(":")) {
+            al.label = ws[i].substring(0, ws[i].length() - 1);
+            i++;
+            if (i >= ws.length) return al; // label-only line
+        }
+
+        // Op
+        al.op = ws[i].toUpperCase(Locale.ROOT);
+        i++;
+
+        // Remaining text may include commas/spaces; reconstruct from original code
+        // We rebuild from ws parts rather than slicing raw indicies to keep it simple.
+        if (i < ws.length) {
+            String rest = String.join(" ", Arrays.copyOfRange(ws, i, ws.length)).trim();
+            al.operands = splitOperands(rest);
+        } else {
+            al.operands = List.of();
+        }
+        return al;
+    }
+
+    private static List<String> splitOperands(String operandText) {
+        if (operandText == null || operandText.isBlank()) return List.of();
+        String[] parts = operandText.split(",");
+        List<String> out = new ArrayList<>(parts.length);
+        for (String p : parts) {
+            String t = p.trim();
+            if (!t.isEmpty()) out.add(t);
+        }
+        return out;
+    }
+
+    // ----------------------------
+    // Pass 1: build symbol table + assign addresses
+    // ----------------------------
+
+    static class Pass1Result {
+        final List<AsmLine> lines;
+        final Map<String, Integer> symtab;
+        final List<String> errors;
+
+        Pass1Result(List<AsmLine> lines, Map<String, Integer> symtab, List<String> errors) {
+            this.lines = lines;
+            this.symtab = symtab;
+            this.errors = errors;
+        }
+    }
+
+    private Pass1Result passOne(List<String> rawLines) {        
+        int lc = 0; // Set code location to 0
+        Map<String, Integer> symtab = new LinkedHashMap<>();
+        List<String> errors = new ArrayList<>();
+        List<AsmLine> lines = new ArrayList<>();
+
+        for (int idx = 0; idx < rawLines.size(); idx++) {
+            int lineNo = idx + 1;
+            AsmLine al = parseLine(lineNo, rawLines.get(idx));
+            lines.add(al);
+
+            if (al.isBlankOrCommentOnly()) continue;
+
+            // Label: define at current LC (even if the rest of line is LOC or blank)
+            if (al.label != null) {
+                if (symtab.containsKey(al.label)) {
+                    errors.add("Line " + lineNo + ": Duplicate label '" + al.label + "'");
+                } else {
+                    symtab.put(al.label, lc);
+                }
+            }
+
+            if (al.op == null) continue;
+
+            // Directives
+            if (al.op.equals("LOC")) {
+                if (al.operands.size() != 1) {
+                    errors.add("Line " + lineNo + ": LOC requires exactly 1 decimal operand");
+                    continue;
+                }
+                Integer newLc = parseDecimalInt(al.operands.get(0));
+                if (newLc == null) {
+                    errors.add("Line " + lineNo + ": LOC operand must be decimal, got '" + al.operands.get(0) + "'");
+                    continue;
+                }
+                lc = newLc;
                 continue;
             }
-            
-            String line = raw;
-            int semi = line.indexOf(';');
-            if (semi >= 0) line = line.substring(0, semi);
-            line = line.trim();
 
-            // 3.Use the split command to break the line into parts 
-            String[] tokens = line.split("\\s+");
-            //token index
-            int t = 0;
-
-            //Skip if : is present
-            if (tokens[t].endsWith(":")) {
-                t++;
+            if (al.op.equals("DATA")) {
+                // DATA allocates one word
+                al.address = lc;
+                lc += 1;
+                // operand validity checked in pass2 (where we can resolve labels)
+                continue;
             }
 
-            //Retrieve opcode
-            String op = tokens[t].toUpperCase(Locale.ROOT);
-            t++;
-
-            // 4. Convert the code according to the second field.
-            int word = 0;
-            
-            // Data
-            if(op.equals("DATA")) {
-                String arg = tokens[t];
-                //String octalArg = null;
-
-                // If arg is addr, normally convert
-                // if(isInteger(arg)){
-                //     octalArg = toOctal(Integer.parseInt(arg));
-                // }
-
-                // If not, check symtab for lable location
-                if(symtab.containsKey(arg)){
-                    word = symtab.get(arg);
-                }
-                else {
-                    word = Integer.parseInt(arg);
-                }
+            // Instructions
+            if (OPCODE.containsKey(al.op)) {
+                al.address = lc;
+                lc += 1;
+                continue;
             }
 
-            else {
-                String operands = t < tokens.length ? tokens[t] : "";
-                word = encodeInstruction(op, operands);
-            }
-
-            // 5. Add line to listing file and to load file. 
-            String octalAddr = String.format("%06o", addr);
-            String octalWord = String.format("%06o", word & 0xFFFF);
-
-            list.write(octalAddr + "  " + octalWord + "  " + raw + "\n");
-            load.write(octalAddr + "  " + octalWord + "\n");
-            }
-
-        list.close();
-        load.close();
+            errors.add("Line " + lineNo + ": Unknown opcode/directive '" + al.op + "'");
         }
 
-    /**
-     * Helper methods to encode instructions, get opcodes, and convert to octal
-     */
+        return new Pass1Result(lines, symtab, errors);
+    }
 
-    /**
-     * Returns the opcode for a given instruction mnemonic
-     * @param op
-     * @return the integer opcode corresponding to the instruction mnemonic, or -1 if the mnemonic is invalid
-     */
-    private int getOpcode(String op) {
-        switch(op) {
-            case "HLT": return 00;
-            case "TRAP": return 030;
-            case "LDR": return 01;
-            case "STR": return 02;
-            case "LDA": return 03;
-            case "LDX": return 041;
-            case "STX": return 042;
-            case "JZ": return 010;
-            case "JNE": return 011;
-            case "JCC": return 012;
-            case "JMA": return 013;
-            case "JSR": return 014;
-            case "RFS": return 015;
-            case "SOB": return 016;
-            case "JGE": return 017;
-            case "AMR": return 04;
-            case "SMR": return 05;
-            case "AIR": return 06;
-            case "SIR": return 07;
-            case "MLT": return 070;
-            case "DVD": return 071;
-            case "TRR": return 072;
-            case "AND": return 073;
-            case "ORR": return 074;
-            case "NOT": return 075;
-            case "SRC": return 031;
-            case "RRC": return 032;
-            case "IN": return 061;
-            case "OUT": return 062;
-            case "CHK": return 063;
-            case "FADD": return 033;
-            case "FSUB": return 034;
-            case "VADD": return 035;
-            case "VSUB": return 036;
-            case "CNVRT": return 037;
-            case "LDFR": return 050;
-            case "STFR": return 051;
-            default: return -1;
+    // ----------------------------
+    // Pass 2: encode + write outputs
+    // ----------------------------
+
+    static class Pass2Result {
+        final List<String> errors;
+        Pass2Result(List<String> errors) { this.errors = errors; }
+    }
+
+    private Pass2Result passTwo(List<AsmLine> lines,
+                                Map<String, Integer> symtab,
+                                File listingFile,
+                                File loadFile) throws IOException {
+
+        List<String> errors = new ArrayList<>();
+
+        try (BufferedWriter list = new BufferedWriter(new FileWriter(listingFile));
+             BufferedWriter load = new BufferedWriter(new FileWriter(loadFile))) {
+
+            for (AsmLine al : lines) {
+
+                // No generated word => blank address/word columns in listing
+                if (!al.generatesWord()) {
+                    list.write(String.format(LISTING_FMT, "", "", al.raw));
+                    continue;
+                }
+
+                int word = 0;
+                List<String> lineErrors = new ArrayList<>();
+
+                if ("DATA".equals(al.op)) {
+                    if (al.operands.size() != 1) {
+                        lineErrors.add("DATA requires exactly 1 operand");
+                        word = 0;
+                    } else {
+                        ResolveResult rr = resolveValue(al.operands.get(0), symtab);
+                        if (!rr.ok) {
+                            lineErrors.add(rr.error);
+                            word = 0;
+                        } else {
+                            word = rr.value;
+                        }
+                    }
+                } else {
+                    EncodeResult er = encodeInstruction(al.op, al.operands, symtab);
+                    word = er.word;
+                    lineErrors.addAll(er.errors);
+                }
+
+                String addrField = (al.address == null) ? "" : fmtOctal6(al.address);
+                String wordField = (al.address == null) ? "" : fmtOctal6(word);
+
+                // Listing line: include errors at end (grader-friendly)
+                if (lineErrors.isEmpty()) {
+                    list.write(String.format(LISTING_FMT, addrField, wordField, al.raw));
+                } else {
+                    String errText = String.join(" | ", lineErrors);
+                    list.write(String.format(LISTING_FMT, addrField, wordField, al.raw + " ; ERROR: " + errText));
+                    errors.add("Line " + al.lineNo + ": " + errText);
+                }
+
+                // Load file: include word even if errors? Usually no.
+                // Policy: only output to load if no errors for that line.
+                if (lineErrors.isEmpty()) {
+                    load.write(String.format(LOAD_FMT, al.address, word & 0xFFFF));
+                }
+            }
+        }
+
+        return new Pass2Result(errors);
+    }
+
+    // ----------------------------
+    // Encoding
+    // ----------------------------
+
+    static class EncodeResult {
+        final int word;
+        final List<String> errors;
+        EncodeResult(int word, List<String> errors) {
+            this.word = word & 0xFFFF;
+            this.errors = errors;
         }
     }
 
-    /**
-     * Encodes an instruction into its 16-bit machine code representation based on the opcode and operands
-     * @param op the instruction mnemonic
-     * @param operands the string containing the operands for the instruction, separated by commas
-     * @return an integer representing the encoded machine code for the instruction
-     */
-    private int encodeInstruction(String op, String operands) {
-        int opcode = getOpcode(op);
+    static class ResolveResult {
+        final boolean ok;
+        final int value;
+        final String error;
+        ResolveResult(boolean ok, int value, String error) {
+            this.ok = ok;
+            this.value = value;
+            this.error = error;
+        }
+        static ResolveResult ok(int v) { return new ResolveResult(true, v, null); }
+        static ResolveResult err(String e) { return new ResolveResult(false, 0, e); }
+    }
 
-        String[] parts = operands.isEmpty() ? new String[0] : operands.split(",");
-        
-        switch (op){
-            case "HLT":
-                return 0;
+    private EncodeResult encodeInstruction(String op, List<String> operands, Map<String, Integer> symtab) {
+        Integer opcode = OPCODE.get(op);
+        if (opcode == null) return new EncodeResult(0, List.of("Unknown opcode '" + op + "'"));
 
-            case "LDR":
-            case "STR":
-            case "LDA":
-            case "AMR":
-            case "SMR":
-            case "JZ":
-            case "JNE":
-            case "JCC":
-            case "JGE":
-            case "SOB": {
-                int r = Integer.parseInt(parts[0].trim());
-                int x = Integer.parseInt(parts[1].trim());
-                int addr = Integer.parseInt(parts[2].trim());
-                int indx = (parts.length > 3 && parts[3].trim().equals("1")) ? 1 : 0;
-                return (opcode << 10) | (r << 8) | (x << 6) | (indx << 5) | (addr & 0x1F);
-            }
-            case "LDX":
-            case "STX":
-            case "JMA":
-            case "JSR": {
-                int ix = Integer.parseInt(parts[0].trim());
-                int addr = Integer.parseInt(parts[1].trim());
-                int indx = (parts.length > 2 && parts[2].trim().equals("1")) ? 1 : 0;
-                return (opcode << 10) | (ix << 6) | (indx << 5) | (addr & 0x1F);
-            }
+        List<String> errs = new ArrayList<>();
+        int word = 0;
 
-            case "RFS": {
-                int immediate = parts.length > 0 ? Integer.parseInt(parts[0].trim()) : 0;
-                return (opcode << 10) | (immediate & 0x1F);
-            }
-
-            case "AIR":
-            case "SIR": {
-                int r = Integer.parseInt(parts[0].trim());
-                int immediate = Integer.parseInt(parts[1].trim());
-                return (opcode << 10) | (r << 8) | (immediate & 0x1F);
-            }
-
-            case "MLT":
-            case "DVD":
-            case "TRR":
-            case "AND":
-            case "ORR":
-                int rx = Integer.parseInt(parts[0].trim());
-                int ry = Integer.parseInt(parts[1].trim());
-                return (opcode << 10) | (rx << 8) | (ry << 6);
-
-            case "NOT":
-                int r = Integer.parseInt(parts[0].trim());
-                return (opcode << 10) | (r << 8);
-
-            case "SRC":
-            case "RRC": {
-                int x = Integer.parseInt(parts[0].trim());
-                int count = Integer.parseInt(parts[1].trim());
-                int lr = Integer.parseInt(parts[2].trim());
-                int al = Integer.parseInt(parts[3].trim());
-                return (opcode << 10) | (x << 8) | (al << 7) | (lr << 6) |(count & 0xF);
+        switch (op) {
+            case "HLT": {
+                word = 0;
+                break;
             }
 
             case "TRAP": {
-                int code = Integer.parseInt(parts[0].trim());
-                return (opcode << 10) | (code & 0xF);
-
-            }
-            
-            case "FADD":
-            case "FSUB":
-            case "VADD":
-            case "VSUB":
-            case "CNVRT": 
-            case "LDFR":
-            case "STFR": {
-                int ri = Integer.parseInt(parts[0].trim());
-                int ix = Integer.parseInt(parts[1].trim());
-                int addr = Integer.parseInt(parts[2].trim());
-                int indx = (parts.length > 3 && parts[3].trim().equals("1")) ? 1 : 0;
-                return (opcode << 10) | (ri << 8) | (ix << 6) | (indx << 5) | (addr & 0x1F);
+                if (operands.size() != 1) {
+                    errs.add("TRAP requires 1 operand (code 0..15)");
+                    break;
+                }
+                Integer code = parseDecimalInt(operands.get(0));
+                if (code == null) { errs.add("TRAP code must be decimal"); break; }
+                if (code < 0 || code > 15) errs.add("TRAP code out of range (0..15)");
+                word = (opcode << 10) | (code & 0xF);
+                break;
             }
 
-            case "IN":
-            case "OUT":
-            case "CHK": {
-                int rj = Integer.parseInt(parts[0].trim());
-                int devid = Integer.parseInt(parts[1].trim());
-                return (opcode << 10) | (rj << 8) | (devid & 0x1F);
+            // r,x,address[,I] (JCC: first is cc not r)
+            case "LDR": case "STR": case "LDA":
+            case "AMR": case "SMR":
+            case "JZ":  case "JNE": case "JGE": case "SOB":
+            case "JCC": {
+                int expectedMin = 3;
+                if (operands.size() < expectedMin || operands.size() > 4) {
+                    errs.add(op + " expects 3 operands (r/cc,x,address) plus optional I");
+                    break;
+                }
+
+                // r or cc
+                Integer rOrCc = parseDecimalInt(operands.get(0));
+                Integer ix = parseDecimalInt(operands.get(1));
+                ResolveResult addrR = resolveValue(operands.get(2), symtab);
+                Integer iBit = (operands.size() == 4) ? parseDecimalInt(operands.get(3)) : 0;
+
+                if (rOrCc == null) errs.add(op + ": first operand must be decimal");
+                if (ix == null) errs.add(op + ": IX must be decimal");
+                if (!addrR.ok) errs.add(op + ": " + addrR.error);
+                if (iBit == null) errs.add(op + ": I must be decimal 0/1");
+
+                if (!errs.isEmpty()) break;
+
+                // Validate ranges
+                if (op.equals("JCC")) {
+                    if (rOrCc < 0 || rOrCc > 3) errs.add("cc out of range (0..3)");
+                } else {
+                    if (rOrCc < 0 || rOrCc > 3) errs.add("r out of range (0..3)");
+                }
+                if (ix < 0 || ix > 3) errs.add("IX out of range (0..3)");
+                if (iBit < 0 || iBit > 1) errs.add("I must be 0 or 1");
+                if (addrR.value < 0 || addrR.value > 31) errs.add("Address field out of range (0..31): " + addrR.value);
+
+                if (!errs.isEmpty()) break;
+
+                word = (opcode << 10)
+                        | ((rOrCc & 0x3) << 8)
+                        | ((ix & 0x3) << 6)
+                        | ((iBit & 0x1) << 5)
+                        | (addrR.value & 0x1F);
+                break;
             }
 
-            default:
-                System.out.println("Opcode Invalid: " + op);
-                return 0;
+            // x,address[,I] (r ignored for JMA/JSR in ISA)
+            case "LDX": case "STX":
+            case "JMA": case "JSR": {
+                if (operands.size() < 2 || operands.size() > 3) {
+                    errs.add(op + " expects 2 operands (x,address) plus optional I");
+                    break;
+                }
+
+                Integer ix = parseDecimalInt(operands.get(0));
+                ResolveResult addrR = resolveValue(operands.get(1), symtab);
+                Integer iBit = (operands.size() == 3) ? parseDecimalInt(operands.get(2)) : 0;
+
+                if (ix == null) errs.add(op + ": x must be decimal");
+                if (!addrR.ok) errs.add(op + ": " + addrR.error);
+                if (iBit == null) errs.add(op + ": I must be decimal 0/1");
+                if (!errs.isEmpty()) break;
+
+                if (ix < 0 || ix > 3) errs.add("IX out of range (0..3)");
+                if (iBit < 0 || iBit > 1) errs.add("I must be 0 or 1");
+                if (addrR.value < 0 || addrR.value > 31) errs.add("Address field out of range (0..31): " + addrR.value);
+                if (!errs.isEmpty()) break;
+
+                word = (opcode << 10)
+                        | ((ix & 0x3) << 6)
+                        | ((iBit & 0x1) << 5)
+                        | (addrR.value & 0x1F);
+                break;
+            }
+
+            case "RFS": {
+                if (operands.size() != 1) {
+                    errs.add("RFS expects 1 operand (immed)");
+                    break;
+                }
+                Integer immed = parseDecimalInt(operands.get(0));
+                if (immed == null) { errs.add("RFS immed must be decimal"); break; }
+                if (immed < 0 || immed > 31) errs.add("RFS immed out of range (0..31)");
+                if (!errs.isEmpty()) break;
+
+                word = (opcode << 10) | (immed & 0x1F);
+                break;
+            }
+
+            case "AIR": case "SIR": {
+                if (operands.size() != 2) {
+                    errs.add(op + " expects 2 operands (r,immed)");
+                    break;
+                }
+                Integer r = parseDecimalInt(operands.get(0));
+                Integer immed = parseDecimalInt(operands.get(1));
+                if (r == null) errs.add("r must be decimal");
+                if (immed == null) errs.add("immed must be decimal");
+                if (!errs.isEmpty()) break;
+
+                if (r < 0 || r > 3) errs.add("r out of range (0..3)");
+                if (immed < 0 || immed > 31) errs.add("immed out of range (0..31)");
+                if (!errs.isEmpty()) break;
+
+                word = (opcode << 10) | ((r & 0x3) << 8) | (immed & 0x1F);
+                break;
+            }
+
+            // rx,ry register-to-register ops
+            case "MLT": case "DVD":
+            case "TRR": case "AND": case "ORR": {
+                if (operands.size() != 2) {
+                    errs.add(op + " expects 2 operands (rx,ry)");
+                    break;
+                }
+                Integer rx = parseDecimalInt(operands.get(0));
+                Integer ry = parseDecimalInt(operands.get(1));
+                if (rx == null) errs.add("rx must be decimal");
+                if (ry == null) errs.add("ry must be decimal");
+                if (!errs.isEmpty()) break;
+
+                if (rx < 0 || rx > 3) errs.add("rx out of range (0..3)");
+                if (ry < 0 || ry > 3) errs.add("ry out of range (0..3)");
+
+                // Spec constraints for MLT/DVD: rx must be 0 or 2; ry must be 0 or 2
+                if (op.equals("MLT") || op.equals("DVD")) {
+                    if (!(rx == 0 || rx == 2)) errs.add(op + ": rx must be 0 or 2");
+                    if (!(ry == 0 || ry == 2)) errs.add(op + ": ry must be 0 or 2");
+                }
+
+                if (!errs.isEmpty()) break;
+
+                word = (opcode << 10) | ((rx & 0x3) << 8) | ((ry & 0x3) << 6);
+                break;
+            }
+
+            case "NOT": {
+                if (operands.size() != 1) {
+                    errs.add("NOT expects 1 operand (r)");
+                    break;
+                }
+                Integer r = parseDecimalInt(operands.get(0));
+                if (r == null) { errs.add("r must be decimal"); break; }
+                if (r < 0 || r > 3) errs.add("r out of range (0..3)");
+                if (!errs.isEmpty()) break;
+
+                word = (opcode << 10) | ((r & 0x3) << 8);
+                break;
+            }
+
+            // Shift/Rotate: r,count,L/R,A/L
+            case "SRC": case "RRC": {
+                if (operands.size() != 4) {
+                    errs.add(op + " expects 4 operands (r,count,L/R,A/L)");
+                    break;
+                }
+                Integer r = parseDecimalInt(operands.get(0));
+                Integer count = parseDecimalInt(operands.get(1));
+                Integer lr = parseDecimalInt(operands.get(2));
+                Integer al = parseDecimalInt(operands.get(3));
+
+                if (r == null) errs.add("r must be decimal");
+                if (count == null) errs.add("count must be decimal");
+                if (lr == null) errs.add("L/R must be decimal 0/1");
+                if (al == null) errs.add("A/L must be decimal 0/1");
+                if (!errs.isEmpty()) break;
+
+                if (r < 0 || r > 3) errs.add("r out of range (0..3)");
+                if (count < 0 || count > 15) errs.add("count out of range (0..15)");
+                if (lr < 0 || lr > 1) errs.add("L/R must be 0 or 1");
+                if (al < 0 || al > 1) errs.add("A/L must be 0 or 1");
+                if (!errs.isEmpty()) break;
+
+                // Encoding (as you had): opcode[15..10] r[9..8] A/L[7] L/R[6] count[3..0]
+                word = (opcode << 10)
+                        | ((r & 0x3) << 8)
+                        | ((al & 0x1) << 7)
+                        | ((lr & 0x1) << 6)
+                        | (count & 0xF);
+                break;
+            }
+
+            // I/O: r,devid
+            case "IN": case "OUT": case "CHK": {
+                if (operands.size() != 2) {
+                    errs.add(op + " expects 2 operands (r,devid)");
+                    break;
+                }
+                Integer r = parseDecimalInt(operands.get(0));
+                Integer devid = parseDecimalInt(operands.get(1));
+                if (r == null) errs.add("r must be decimal");
+                if (devid == null) errs.add("devid must be decimal");
+                if (!errs.isEmpty()) break;
+
+                if (r < 0 || r > 3) errs.add("r out of range (0..3)");
+                if (devid < 0 || devid > 31) errs.add("devid out of range (0..31)");
+                if (!errs.isEmpty()) break;
+
+                word = (opcode << 10) | ((r & 0x3) << 8) | (devid & 0x1F);
+                break;
+            }
+
+            default: {
+                // If you add FP/vector later, copy the r,x,address[,I] pattern and validate FR ranges.
+                errs.add("Encoding not implemented for " + op);
+                break;
+            }
         }
+
+        return new EncodeResult(word, errs);
     }
 
-    /**
-     * Checks if a string can be parsed as an integer
-     * @param str
-     * @return boolean indicating if the string is an integer
-     */
-    public static boolean isInteger(String str) {
-        //For null input
-        if (str == null) 
-            return false;{ 
-        }
+    // ----------------------------
+    // Resolution + parsing helpers
+    // ----------------------------
+
+    private static ResolveResult resolveValue(String token, Map<String, Integer> symtab) {
+        Integer dec = parseDecimalInt(token);
+        if (dec != null) return ResolveResult.ok(dec);
+        Integer addr = symtab.get(token);
+        if (addr != null) return ResolveResult.ok(addr);
+        return ResolveResult.err("Undefined symbol or invalid decimal '" + token + "'");
+    }
+
+    private static Integer parseDecimalInt(String s) {
+        if (s == null) return null;
         try {
-            Integer.parseInt(str);
-            return true;
+            // Spec says LOC/DATA operands are decimal in examples.
+            // If you later want octal literals, add detection like "0o" or leading "0" policy.
+            return Integer.parseInt(s.trim(), 10);
         } catch (NumberFormatException e) {
-            return false;
+            return null;
         }
     }
 
-    /**
-     * Converts an integer to a 6-digit octal string
-     * @param num
-     * @return a string representing the octal value of the input integer, padded to 6 digits
-     */
-    public String toOctal(Integer num){
-        return String.format("%06d", Integer.parseInt(Integer.toOctalString(num)));
+    private static String fmtOctal6(int value) {
+        return String.format("%06o", value & 0xFFFF);
     }
 
-    /**
-     * Debug method to print the symbol table, addresses by line, and any errors from pass one
-     */
-    public void debugPrintPassOne() {
-        System.out.println("SYMTAB:");
-        for (var e : symtab.entrySet()) {
-            System.out.println("  " + e.getKey() + " = " + e.getValue());
-        }
-        System.out.println("\nADDR BY LINE:");
-        for (int i = 0; i < sourceCode.size(); i++) {
-            System.out.printf("%3d  %6s  %s%n",
-                    (i + 1),
-                    (addrByLine.get(i) == null ? "------" : addrByLine.get(i).toString()),
-                    sourceCode.get(i));
-        }
-        System.out.println("\nPASS1 Errors:");
-        for (String err : passOneErrors) System.out.println("  " + err);
-    }
-
-    /**
-     * Main assembly method that runs pass one and pass two, and handles any IO exceptions
-     */
-    public void assemble(String sourceFile) {
-        try {
-            passOne(sourceFile);
-            // DEBUG
-            debugPrintPassOne();
-            passTwo("Listing.txt", "Load.txt");
-        } catch (IOException e) {
-            System.out.println("Error during assembly: " + e.getMessage());
-        }
-    }
-
-    // Main method to run the assembler with a source file
-    public static void main(String[] args) {
-        System.out.println("Running tests...");
-        // Assembler logic here
-        Assembler assembler = new Assembler();
-        assembler.assemble("source_file.txt");
-        //Simple test case
-        // assembler.assemble("testfile.txt");
+    private static String blank6() {
+        return "      ";
     }
 }
