@@ -37,6 +37,21 @@ public class Assembler {
         "FADD", "FSUB", "VADD", "VSUB", "CNVRT", "LDFR", "STFR"
     ));
 
+    /**
+     * Pass One
+     * 1. Set code location to 0
+     * 2. Read a line of the file
+     * 3. Use the split command to break the line into its parts
+     * 4. Process the line,
+     *      - If its a label, add the label to a dictionary with the code location.
+     *      - Process the rest of the line
+     *      - Check for errors in the code
+     * 5. If code or data was generated, increment code location and go to step 2
+     *      until termination
+     * 
+     * @param sourceFile
+     * @throws IOException
+     */
     private void passOne(String sourceFile) throws IOException {        
         lc = 0; // Set code location to 0
         sourceCode.clear();
@@ -132,10 +147,21 @@ public class Assembler {
         }
     }
 
+    /**
+     * Pass Two
+     * 1. Set code location to 0
+     * 2. Read a line of the file
+     * 3. Use the split command to break the line into parts
+     * 4. Convert the code according to the second field.
+     * 5. Add line to listing file and to load file
+     * 6. If code or data generated, increment the code counter, and go to step2 until termination
+     *
+     * @param listingFile
+     * @param loadFile
+     * @throws IOException
+     */
     private void passTwo(String listingFile, String loadFile) throws IOException {
-        System.out.println("Executing Pass Two...");
         // 1. Set code location to 0
-        
         BufferedWriter list = new BufferedWriter(new FileWriter(listingFile));
         BufferedWriter load = new BufferedWriter(new FileWriter(loadFile));
 
@@ -144,7 +170,6 @@ public class Assembler {
             String raw = sourceCode.get(i);
             Integer addr = addrByLine.get(i);
 
-            
             //If there is no address, skip processing, write line to listing file
             if (addr == null){
                 list.write("      " + raw + "\n");
@@ -192,7 +217,6 @@ public class Assembler {
                 }
             }
 
-                
             else {
                 String operands = t < tokens.length ? tokens[t] : "";
                 word = encodeInstruction(op, operands);
@@ -204,14 +228,21 @@ public class Assembler {
 
             list.write(octalAddr + "  " + octalWord + "  " + raw + "\n");
             load.write(octalAddr + "  " + octalWord + "\n");
-            // 6. If code or data generated, increment the code counter, and 
-            // go to step2 until termination. (for loop)
             }
 
         list.close();
         load.close();
         }
 
+    /**
+     * Helper methods to encode instructions, get opcodes, and convert to octal
+     */
+
+    /**
+     * Returns the opcode for a given instruction mnemonic
+     * @param op
+     * @return the integer opcode corresponding to the instruction mnemonic, or -1 if the mnemonic is invalid
+     */
     private int getOpcode(String op) {
         switch(op) {
             case "HLT": return 00;
@@ -255,6 +286,12 @@ public class Assembler {
         }
     }
 
+    /**
+     * Encodes an instruction into its 16-bit machine code representation based on the opcode and operands
+     * @param op the instruction mnemonic
+     * @param operands the string containing the operands for the instruction, separated by commas
+     * @return an integer representing the encoded machine code for the instruction
+     */
     private int encodeInstruction(String op, String operands) {
         int opcode = getOpcode(op);
 
@@ -358,10 +395,11 @@ public class Assembler {
         }
     }
 
-
-    
-
-
+    /**
+     * Checks if a string can be parsed as an integer
+     * @param str
+     * @return boolean indicating if the string is an integer
+     */
     public static boolean isInteger(String str) {
         //For null input
         if (str == null) 
@@ -375,10 +413,18 @@ public class Assembler {
         }
     }
 
+    /**
+     * Converts an integer to a 6-digit octal string
+     * @param num
+     * @return a string representing the octal value of the input integer, padded to 6 digits
+     */
     public String toOctal(Integer num){
         return String.format("%06d", Integer.parseInt(Integer.toOctalString(num)));
     }
 
+    /**
+     * Debug method to print the symbol table, addresses by line, and any errors from pass one
+     */
     public void debugPrintPassOne() {
         System.out.println("SYMTAB:");
         for (var e : symtab.entrySet()) {
@@ -395,6 +441,9 @@ public class Assembler {
         for (String err : passOneErrors) System.out.println("  " + err);
     }
 
+    /**
+     * Main assembly method that runs pass one and pass two, and handles any IO exceptions
+     */
     public void assemble(String sourceFile) {
         try {
             passOne(sourceFile);
@@ -406,12 +455,13 @@ public class Assembler {
         }
     }
 
+    // Main method to run the assembler with a source file
     public static void main(String[] args) {
         System.out.println("Running tests...");
         // Assembler logic here
         Assembler assembler = new Assembler();
         assembler.assemble("source_file.txt");
         //Simple test case
-        assembler.assemble("testfile.txt");
+        // assembler.assemble("testfile.txt");
     }
 }
