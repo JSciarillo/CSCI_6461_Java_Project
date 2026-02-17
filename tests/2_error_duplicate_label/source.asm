@@ -1,0 +1,3 @@
+LOC 6
+X: DATA 1
+X: HLT
