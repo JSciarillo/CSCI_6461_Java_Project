@@ -1,0 +1,10 @@
+                        LOC 60          ; start at decimal 60 (octal 000074)
+                
+000074  000103  Start:  DATA End        ; symbol resolution: address of End into memory
+000075  160200          MLT 0,2         ; valid: rx in {0,2}, ry in {0,2}
+000076  163000          DVD 2,0
+000077  164700          TRR 1,3         ; equality flag behavior (assembler encodes)
+000100  166100          AND 0,1
+000101  171300          ORR 2,3
+000102  173400          NOT 3
+000103  000000  End:    HLT             ; label target
