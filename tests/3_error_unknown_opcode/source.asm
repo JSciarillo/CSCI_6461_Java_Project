@@ -1,0 +1,3 @@
+LOC 6
+BOGUS 1,2,3
+HLT
