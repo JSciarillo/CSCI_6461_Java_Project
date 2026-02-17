@@ -1,0 +1,3 @@
+                LOC 6
+000006  000000  DATA Missing ; ERROR: Undefined symbol or invalid decimal 'Missing'
+000007  000000  HLT
