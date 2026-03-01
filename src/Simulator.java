@@ -1,32 +1,42 @@
 package src;
 import java.io.*;
 
+/**
+ * Simulator.java
+ * 
+ * Ties CPU + Memory together and provides "front-panel style" operations:
+ * - reset (clears memory and registers)
+ * - load program from a load-file
+ * - singleStep / run
+ */
 public final class Simulator {
     private final CPU cpu;
     private final Memory mem;
 
-    public Simulator(int memSizeWords, int wordBits) {
+    public Simulator(int memSizeWords) {
         this.cpu = new CPU();
-        this.mem = new Memory(memSizeWords, wordBits);
-        this.cpu.reset();
+        this.mem = new Memory(memSizeWords);
+        reset();
     }
 
     public void reset(){
         cpu.reset();
-        //clear memory
-        for (int i = 0; i < mem.size(); i++) {
-            mem.write(i, 0);
-        }
+        mem.clear();
     }
 
+    /**
+     * Load a program from a "Load.txt"-style file:
+     * each line: "<octalAddr> <octalWord>"
+     * - Blank lines allowed
+     * - Lines beginning with ';' treated as comments
+     */
     public void loadProgramFromFile(String filename) throws IOException{
         try (BufferedReader br = new BufferedReader(new FileReader(filename))) {
-            String line;
-            while ((line = br.readLine()) != null) {
+            for (String line; (line = br.readLine()) != null; ) {
                 line = line.trim();
                 if (line.isEmpty()) continue;
+                if (line.startsWith(";")) continue;
 
-                //parse octal addr and value
                 String[] parts = line.split("\\s+");
                 if (parts.length < 2) continue;
 
@@ -61,10 +71,19 @@ public final class Simulator {
     public void singleStep(){
         cpu.singleStep(mem);
     }
-    //For the run buttom in GUI
-    public void run() {
-        while (!cpu.isHalted()) {
+
+    /**
+     * Runs until HALT or until maxSteps is reached
+     */
+    public void run(int maxSteps) {
+        int steps = 0;
+        while (!cpu.isHalted() && steps < maxSteps) {
             cpu.singleStep(mem);
+            steps++;
+        }
+        if(!cpu.isHalted()) {
+            System.out.println("Run stopped after maxSteps="
+                + maxSteps + " (possible infinite loop).");
         }
     }
 
@@ -74,24 +93,4 @@ public final class Simulator {
     public int getMemoryAtMAR() {
         return mem.read(cpu.getMAR());
     }
-
 }
-//     // Temp test
-//     public static void main(String[] args) {
-//         Simulator s = new Simulator(2048, 16);
-
-//         int A = 100;
-//         int X = 0x1234;
-
-//         s.depositMemory(A, X);
-//         s.setPC(A);
-
-//         s.singleStep();
-
-//         System.out.println("MAR=" + s.getCPU().getMAR());
-//         System.out.println("IR=" + s.getCPU().getIR());
-//         System.out.println("PC=" + s.getCPU().getPC());
-//         System.out.println("MEM[MAR]=" + s.getMemoryAtMAR());
-//     }
-// }
-
