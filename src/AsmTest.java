@@ -8,9 +8,9 @@ import java.util.*;
 public class AsmTest {
 
     public static void main(String[] args) throws Exception {
-        Path testsRoot = Paths.get("tests");
+        Path testsRoot = Paths.get("tests", "asm");
         if (!Files.isDirectory(testsRoot)) {
-            System.out.println("ERROR: tests/ directory not found at: " + testsRoot.toAbsolutePath());
+            System.out.println("ERROR: tests/asm directory not found at: " + testsRoot.toAbsolutePath());
             System.exit(1);
         }
 

@@ -1,0 +1,382 @@
+commit 8ba316eb5eb81108c60336b65a497d5f4b6be0bc
+Author: OliverKris <okrisetya@gmail.com>
+Date:   Sat Feb 28 21:11:06 2026 -0500
+
+    Updated running instructions
+
+ SIMULATOR_DOCUMENTATION.md | 62 ++++++++++++++++++++++++++++++++++++++--------
+ 1 file changed, 52 insertions(+), 10 deletions(-)
+
+commit beee7032c496ee3db2eb5bf3078b6529cdfd4a1d
+Author: OliverKris <okrisetya@gmail.com>
+Date:   Sat Feb 28 21:08:02 2026 -0500
+
+    Created simluator.jar
+
+ jars/simulator.jar | Bin 0 -> 30497 bytes
+ 1 file changed, 0 insertions(+), 0 deletions(-)
+
+commit d8761a27bb41397e66c8cfd1e025abf8dd4805de
+Author: OliverKris <okrisetya@gmail.com>
+Date:   Sat Feb 28 21:02:25 2026 -0500
+
+    Simulator design notes and documentation
+
+ SIMULATOR_DOCUMENTATION.md | 208 +++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 208 insertions(+)
+
+commit 239abe08b2f910911791535d41ff9e3230f6bd5c
+Merge: d97d546 c744a8b
+Author: Oliver Krisetya <93892018+OliverKris@users.noreply.github.com>
+Date:   Sat Feb 28 20:48:15 2026 -0500
+
+    Merge pull request #7 from JSciarillo/simulator_fix
+    
+    Simulator fix
+
+commit c744a8b725afed5bce6e4f1430fb5318ef8edf7d
+Author: OliverKris <okrisetya@gmail.com>
+Date:   Sat Feb 28 20:47:52 2026 -0500
+
+    Updated testing structure, fixed CPU indexing errors, added simulator testing
+
+ src/AsmTest.java                                   |   4 +-
+ src/CPU.java                                       | 130 +++++------
+ src/GUI.java                                       |  84 ++++++-
+ src/SimTest.java                                   | 252 +++++++++++++++++++++
+ tests/{ => asm}/0_default/expected.listing         |   0
+ tests/{ => asm}/0_default/expected.load            |   0
+ tests/{ => asm}/0_default/source.asm               |   0
+ tests/{ => asm}/1_all_opcodes/expected.listing     |   0
+ tests/{ => asm}/1_all_opcodes/expected.load        |   0
+ tests/{ => asm}/1_all_opcodes/source.asm           |   0
+ .../2_error_duplicate_label/expected.errors        |   0
+ .../2_error_duplicate_label/expected.listing       |   0
+ .../2_error_duplicate_label/expected.load          |   0
+ tests/{ => asm}/2_error_duplicate_label/source.asm |   0
+ .../3_error_unknown_opcode/expected.errors         |   0
+ .../3_error_unknown_opcode/expected.listing        |   0
+ .../{ => asm}/3_error_unknown_opcode/expected.load |   0
+ tests/{ => asm}/3_error_unknown_opcode/source.asm  |   0
+ .../expected.errors                                |   0
+ .../expected.listing                               |   0
+ .../expected.load                                  |   0
+ .../4_error_undefined_symbol_or_range/source.asm   |   0
+ tests/sim/0_default/expected.final                 |  31 +++
+ test.asm => tests/sim/0_default/source.asm         |   0
+ tests/sim/1_basic_ldr_str/expected.final           |   3 +
+ tests/sim/1_basic_ldr_str/source.asm               |  16 ++
+ tests/sim/2_indexed_ldr_str/expected.final         |   5 +
+ tests/sim/2_indexed_ldr_str/source.asm             |  25 ++
+ tests/sim/3_indircet_ldr_str/expected.final        |   4 +
+ tests/sim/3_indircet_ldr_str/source.asm            |  25 ++
+ tests/sim/4_indexed_indirect_combo/expected.final  |   5 +
+ tests/sim/4_indexed_indirect_combo/source.asm      |  29 +++
+ tests/sim/5_lda_effective_address/expected.final   |   4 +
+ tests/sim/5_lda_effective_address/source.asm       |  20 ++
+ tests/sim/6_pc_sequence_no_skip/expected.final     |   2 +
+ tests/sim/6_pc_sequence_no_skip/source.asm         |  19 ++
+ tests/sim/7_bounds_fault/expected.final            |   4 +
+ tests/sim/7_bounds_fault/source.asm                |  20 ++
+ 38 files changed, 604 insertions(+), 78 deletions(-)
+
+commit ed98c17ff0d861c057898f451b6cf516a2b83517
+Author: OliverKris <okrisetya@gmail.com>
+Date:   Sat Feb 28 19:56:29 2026 -0500
+
+    GUI formatting update
+
+ src/GUI.java | 38 +++++++++++++++++++++++++-------------
+ 1 file changed, 25 insertions(+), 13 deletions(-)
+
+commit 8476c43b92d68a988929d2193dce18926e2cbbb1
+Author: OliverKris <okrisetya@gmail.com>
+Date:   Sat Feb 28 19:50:32 2026 -0500
+
+    Simluator formating fix
+
+ src/Simulator.java | 67 +++++++++++++++++++++++++++---------------------------
+ 1 file changed, 33 insertions(+), 34 deletions(-)
+
+commit 8e8b4770e01cc3d871d2d3af724fae8c56bd4e66
+Author: OliverKris <okrisetya@gmail.com>
+Date:   Sat Feb 28 19:45:13 2026 -0500
+
+    Memory format update
+
+ src/Memory.java | 29 +++++++++++++++++++++--------
+ 1 file changed, 21 insertions(+), 8 deletions(-)
+
+commit 6ea7c576d83999d0232319ec9ca72dea47f13c7d
+Author: OliverKris <okrisetya@gmail.com>
+Date:   Sat Feb 28 19:40:07 2026 -0500
+
+    Update CPU structure and formatting
+
+ src/CPU.java | 192 +++++++++++++++++++++++++++++++++++++----------------------
+ 1 file changed, 120 insertions(+), 72 deletions(-)
+
+commit d97d546297e7e40b927d6d67391606a53a775f2a
+Merge: 0dc6770 95e6cd2
+Author: Oliver Krisetya <93892018+OliverKris@users.noreply.github.com>
+Date:   Sat Feb 28 19:14:04 2026 -0500
+
+    Merge pull request #6 from JSciarillo/simulator
+    
+    Simulator
+
+commit 95e6cd27d1083b9c5e036cbd4998e6e7f56b620e
+Author: JSciarillo <jasminesciarillo@yahoo.com>
+Date:   Sat Feb 28 16:50:22 2026 -0500
+
+    Updated CPU execution and created the GUI
+
+ src/CPU.java       | 108 ++++++++++++++++++++++++++++----
+ src/GUI.java       | 177 +++++++++++++++++++++++++++++++++++++++++++++++++++++
+ src/Simulator.java |  67 +++++++++++++++-----
+ test.asm           |  13 ++++
+ 4 files changed, 338 insertions(+), 27 deletions(-)
+
+commit f4276684403b79d98778d401f2d1840d1e927e53
+Author: Oliver Krisetya <okrisetya@gmail.com>
+Date:   Tue Feb 24 08:42:16 2026 -0500
+
+    Simple fetch setup and test
+
+ src/CPU.java       | 48 ++++++++++++++++++++++++++++++------
+ src/Memory.java    | 34 +++++++++++++++++++++++---
+ src/Simulator.java | 72 +++++++++++++++++++++++++++++++++++++++++++++---------
+ 3 files changed, 131 insertions(+), 23 deletions(-)
+
+commit add76b5d3a9cd60f0646b93f39da4618c5b8b515
+Author: Oliver Krisetya <okrisetya@gmail.com>
+Date:   Tue Feb 24 08:21:46 2026 -0500
+
+    First pass template design of simulator classes
+
+ src/CPU.java       | 16 ++++++++++++++++
+ src/Memory.java    |  6 ++++++
+ src/Simulator.java | 14 ++++++++++++++
+ 3 files changed, 36 insertions(+)
+
+commit 0dc6770b6948b993c2387f7d1736f61a59ce5cca
+Merge: 57a2d13 bc7f939
+Author: Oliver Krisetya <93892018+OliverKris@users.noreply.github.com>
+Date:   Mon Feb 16 23:24:35 2026 -0500
+
+    Merge pull request #4 from JSciarillo/testing
+    
+    Testing
+
+commit bc7f939d2a24736b5c2976d6a8c28159425d6997
+Author: OliverKris <okrisetya@gmail.com>
+Date:   Mon Feb 16 19:46:05 2026 -0500
+
+    Added tests, updated test class
+
+ src/AsmTest.java                                   | 127 ++++++++++++++++-----
+ tests/{test1 => 0_default}/expected.listing        |   0
+ tests/{test1 => 0_default}/expected.load           |   0
+ tests/{test1 => 0_default}/source.asm              |   0
+ tests/1_all_opcodes/expected.listing               |  45 ++++++++
+ tests/1_all_opcodes/expected.load                  |  31 +++++
+ tests/1_all_opcodes/source.asm                     |  45 ++++++++
+ tests/2_error_duplicate_label/expected.errors      |   1 +
+ tests/2_error_duplicate_label/expected.listing     |   0
+ tests/2_error_duplicate_label/expected.load        |   0
+ tests/2_error_duplicate_label/source.asm           |   3 +
+ tests/3_error_unknown_opcode/expected.errors       |   1 +
+ tests/3_error_unknown_opcode/expected.listing      |   3 +
+ tests/3_error_unknown_opcode/expected.load         |   1 +
+ tests/3_error_unknown_opcode/source.asm            |   3 +
+ .../expected.errors                                |   1 +
+ .../expected.listing                               |   3 +
+ .../expected.load                                  |   1 +
+ tests/4_error_undefined_symbol_or_range/source.asm |   3 +
+ tests/test2/expected.listing                       |  10 --
+ tests/test2/expected.load                          |   8 --
+ tests/test2/source.asm                             |  10 --
+ 22 files changed, 239 insertions(+), 57 deletions(-)
+
+commit 6d5054bbdd21a364d476042dab8336d6c7a33ce6
+Author: OliverKris <okrisetya@gmail.com>
+Date:   Mon Feb 16 19:32:44 2026 -0500
+
+    Design choices and compilation instruction markdown
+
+ ASSEMBER_DOCUMENTATION.md | 202 ++++++++++++++++++++++++++++++++++++++++++++++
+ source_file.txt           |  18 +++++
+ 2 files changed, 220 insertions(+)
+
+commit 13c9d8a52a02cc84047da484bac741fe9ed9bbdc
+Author: OliverKris <okrisetya@gmail.com>
+Date:   Mon Feb 16 19:06:25 2026 -0500
+
+    Reworked testing env
+
+ .gitignore                                |  21 +++++
+ Assembler.class                           | Bin 12874 -> 0 bytes
+ CSCI_6461_Java_Project.jar                | Bin 8174 -> 0 bytes
+ Listing.txt                               |   8 --
+ Load.txt                                  |   7 --
+ src/AsmTest.java                          | 141 ++++++++++++++++++++++++++++++
+ assembler.java => src/Assembler.java      |   1 +
+ testfile.txt                              |   8 --
+ tests/test1/expected.listing              |  18 ++++
+ tests/test1/expected.load                 |  16 ++++
+ source_file.txt => tests/test1/source.asm |   0
+ tests/test2/expected.listing              |  10 +++
+ tests/test2/expected.load                 |   8 ++
+ tests/test2/source.asm                    |  10 +++
+ 14 files changed, 225 insertions(+), 23 deletions(-)
+
+commit c4ce0cf9a9464e9b298a6b9de585cbd01a063bae
+Author: OliverKris <okrisetya@gmail.com>
+Date:   Mon Feb 16 18:38:50 2026 -0500
+
+    Refactored code
+
+ assembler.java | 984 ++++++++++++++++++++++++++++++++++-----------------------
+ 1 file changed, 592 insertions(+), 392 deletions(-)
+
+commit 57a2d135b40f7961135c4d5d4c262e54ee6107e2
+Merge: 698748c 59bc02e
+Author: Oliver Krisetya <93892018+OliverKris@users.noreply.github.com>
+Date:   Sun Feb 15 19:29:10 2026 -0500
+
+    Merge pull request #3 from JSciarillo/pass-two
+    
+    Pass two
+
+commit 59bc02e411b2329dccbdb412d8bcfee381318142
+Author: OliverKris <okrisetya@gmail.com>
+Date:   Sun Feb 15 19:28:29 2026 -0500
+
+    Added comments to class
+
+ assembler.java | 72 +++++++++++++++++++++++++++++++++++++++++++++++++---------
+ 1 file changed, 61 insertions(+), 11 deletions(-)
+
+commit 7939c4867ed8e9ae525e06bda04b378d93e88b7d
+Author: srikar7123 <srikaratluri7123@gmail.com>
+Date:   Sat Feb 14 11:02:40 2026 -0500
+
+    updated jar file with test case
+
+ Assembler pass-two.jar     | Bin 7607 -> 0 bytes
+ Assembler.class            | Bin 6405 -> 12874 bytes
+ CSCI_6461_Java_Project.jar | Bin 0 -> 8174 bytes
+ Listing.txt                |   8 ++++++++
+ Load.txt                   |   7 +++++++
+ assembler.java             |   2 ++
+ testfile.txt               |   8 ++++++++
+ 7 files changed, 25 insertions(+)
+
+commit 01972366a473a01ffe3bd063c45cc98cbab29428
+Author: srikar7123 <srikaratluri7123@gmail.com>
+Date:   Sat Feb 14 10:50:50 2026 -0500
+
+    changing java file to jar file
+
+ Assembler pass-two.jar | Bin 0 -> 7607 bytes
+ 1 file changed, 0 insertions(+), 0 deletions(-)
+
+commit efd5482dbed6f06e2a85b5c890acd4d5738d21cd
+Author: JSciarillo <jasminesciarillo@yahoo.com>
+Date:   Thu Feb 12 09:37:18 2026 -0500
+
+    Completed pass two- created encode instructions method and writing to listing and load files
+
+ assembler.java | 235 +++++++++++++++++++++++++++++++++++++++++++++++----------
+ 1 file changed, 195 insertions(+), 40 deletions(-)
+
+commit 5d73f51c4cf005462726dc1189db108a10a2ad40
+Author: Oliver Krisetya <okrisetya@gmail.com>
+Date:   Wed Feb 11 14:27:47 2026 -0500
+
+    Addressing conversion to octal representation
+
+ assembler.java | 74 +++++++++++++++++++++++++++++++++++++++++++++++++++-------
+ 1 file changed, 66 insertions(+), 8 deletions(-)
+
+commit 8ea02eff7c33309a679de80bed029584cb6d908b
+Author: JSciarillo <jasminesciarillo@yahoo.com>
+Date:   Wed Feb 11 12:57:19 2026 -0500
+
+    Started pass two, set up output files and skip processing on null address lines
+
+ Assembler.class | Bin 0 -> 6405 bytes
+ assembler.java  |  30 +++++++++++++++++++++++-------
+ 2 files changed, 23 insertions(+), 7 deletions(-)
+
+commit 676d3e517fe68438f86ff528c1f61072ec200fec
+Author: Oliver Krisetya <okrisetya@gmail.com>
+Date:   Tue Feb 10 13:29:50 2026 -0500
+
+    Updated passOne to store symbols and the address of each line
+
+ assembler.java | 166 +++++++++++++++++++++++++++++++++++++++++++++------------
+ 1 file changed, 132 insertions(+), 34 deletions(-)
+
+commit 698748c3cef6003b0d39f3b0f0d741795764fd46
+Merge: f8a9197 bfda342
+Author: Oliver Krisetya <93892018+OliverKris@users.noreply.github.com>
+Date:   Mon Feb 9 15:00:02 2026 -0500
+
+    Merge pull request #1 from JSciarillo/assembler_config
+    
+    Assembler config
+
+commit bfda3429911f19732eb6a806679c9e4442bb9d74
+Author: Oliver Krisetya <okrisetya@gmail.com>
+Date:   Mon Feb 9 14:57:58 2026 -0500
+
+    First attempt for pass 1
+
+ assembler.java | 59 +++++++++++++++++++++++++++++++++++++---------------------
+ 1 file changed, 38 insertions(+), 21 deletions(-)
+
+commit 0a40c805a6e8586a0ef679b5e1357d09e93bfbcc
+Author: Oliver Krisetya <okrisetya@gmail.com>
+Date:   Mon Feb 9 14:26:33 2026 -0500
+
+    Added passes 1 and 2 w/ comments
+
+ assembler.java | 67 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 66 insertions(+), 1 deletion(-)
+
+commit 43b44a7ad6843aad4af84820149a01e8df345ad6
+Author: Oliver Krisetya <okrisetya@gmail.com>
+Date:   Mon Feb 9 14:02:56 2026 -0500
+
+    Uploaded example source file
+
+ source_file.txt | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+commit f8a91971bd27b870a17816e7a603b27c03427a2c
+Author: Oliver Krisetya <okrisetya@gmail.com>
+Date:   Mon Feb 9 13:52:02 2026 -0500
+
+    Added Assembler class
+
+ assembler.java | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+commit c0a75690cbdd3c027c58b0e730b8b382cdbd27c6
+Author: Oliver Krisetya <okrisetya@gmail.com>
+Date:   Mon Feb 9 13:46:59 2026 -0500
+
+    Assembler file created
+
+ assembler.java | 0
+ 1 file changed, 0 insertions(+), 0 deletions(-)
+
+commit 503fc0e785eee32818e2a4b99c4dcf91b3ab2318
+Author: JSciarillo <137231360+JSciarillo@users.noreply.github.com>
+Date:   Wed Jan 28 12:18:33 2026 -0500
+
+    Initial commit
+
+ README.md | 1 +
+ 1 file changed, 1 insertion(+)

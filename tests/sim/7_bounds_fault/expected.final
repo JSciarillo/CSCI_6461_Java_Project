@@ -1,0 +1,4 @@
+; Choose ONE policy:
+; If your CPU halts on out-of-bounds (recommended in Part I):
+R0=0000
+IX1=07F8          ; 2040 decimal = 0x07F8
