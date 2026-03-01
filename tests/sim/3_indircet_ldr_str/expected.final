@@ -1,0 +1,4 @@
+R0=BEEF
+
+MEM[0064]=BEEF    ; M[100]
+MEM[0065]=BEEF    ; M[101]

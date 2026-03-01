@@ -3,6 +3,8 @@ package src;
 import javax.swing.*;
 import java.awt.*;
 import java.io.File;
+import java.util.Locale;
+import java.util.List;
 
 /**
  * GUI.java
@@ -123,20 +125,78 @@ public class GUI extends JFrame {
 
     private void loadProgram() {
         JFileChooser chooser = new JFileChooser(".");
-        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-            try {
-                simulator.reset();
-                simulator.loadProgramFromFile(chooser.getSelectedFile().getAbsolutePath());
-                
-                simulator.setPC(DEFAULT_ENTRY_PC);
+        if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
 
-                JOptionPane.showMessageDialog(this, 
-                    "Program loaded.\nPC set to " + String.format("%04X", DEFAULT_ENTRY_PC));
-                updateDisplays();
-            } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this, "Error: " + ex.getMessage());
+        File selected = chooser.getSelectedFile();
+        String name = selected.getName().toLowerCase(Locale.ROOT);
+
+        try {
+            simulator.reset();
+
+            if (name.endsWith(".asm")) {
+                // 1) Assemble source.asm -> Listing.txt + Load.txt
+                Assembler asm = new Assembler();
+
+                File listing = new File(selected.getParentFile(), "Listing.txt");
+                File load = new File(selected.getParentFile(), "Load.txt");
+
+                Assembler.AssemblerResult res = asm.assemble(selected, listing, load);
+                if (!res.success) {
+                    String msg = "Assembly failed:\n" + String.join("\n", res.errors);
+                    JOptionPane.showMessageDialog(this, msg);
+                    return;
+                }
+
+                // 2) Load the generated Load.txt into memory
+                simulator.loadProgramFromFile(load.getAbsolutePath());
+
+                // 3) Set PC to the first generated address (better than hardcoding 020)
+                Integer entry = firstInstructionAddress(res.lines);
+                if (entry != null) simulator.setPC(entry);
+
+                JOptionPane.showMessageDialog(this,
+                        "Assembled + loaded.\n" +
+                        "Listing: " + listing.getName() + "\n" +
+                        "Load: " + load.getName() + "\n" +
+                        "PC set to: " + String.format("%04X", simulator.getCPU().getPC()));
+
+            } else {
+                // Assume it's already a Load.txt-style file (octal addr/value pairs)
+                simulator.loadProgramFromFile(selected.getAbsolutePath());
+
+                // Pick an entry policy; either keep your old default or set to first non-zero location.
+                simulator.setPC(020); // octal 20 (decimal 16) — Java octal literal
+                JOptionPane.showMessageDialog(this, "Loaded load-file.\nPC set to 0020(octal).");
             }
+
+            updateDisplays();
+
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Error loading program: " + ex.getMessage());
         }
+    }
+
+    private static Integer firstInstructionAddress(List<Assembler.AsmLine> lines) {
+        // Prefer the first actual instruction (not DATA/LOC).
+        // This prevents starting execution on DATA words like at LOC 6.
+        for (Assembler.AsmLine al : lines) {
+            if (al.address == null || al.op == null) continue;
+
+            String op = al.op.toUpperCase(Locale.ROOT);
+
+            // Skip directives / non-executable pseudo-ops
+            if (op.equals("LOC") || op.equals("DATA")) continue;
+
+            // Anything else here is an instruction mnemonic in your assembler.
+            return al.address;
+        }
+
+        // Fallback: if no instruction found, fall back to first generated word
+        for (Assembler.AsmLine al : lines) {
+            if (al.address != null) return al.address;
+        }
+
+        return null;
     }
 
     private void singleStep() {

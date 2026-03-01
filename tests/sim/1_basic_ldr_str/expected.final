@@ -1,0 +1,3 @@
+; Expect halt with the value copied
+R0=1234
+MEM[0015]=1234
