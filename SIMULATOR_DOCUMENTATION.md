@@ -12,23 +12,65 @@
 - Windows / macOS / Linux
 - No external dependencies required
 
-### Compiling the Simulator
+### Running the Simulator (Grader Instructions)
 
-From the project root:
+1. Ensure Java 17+ is installed.
+2. Open a terminal in this folder.
+3. Run:
 
-``` bash
-javac -d out src/*.java
-```
+    java -jar C6461Simulator.jar
 
-### Running the GUI Simulator
+4. Click "IPL (Load Program)" to load a program.
+5. Select either:
+   - A .asm file (assembler will run automatically)
+   - A Load.txt file
+6. Use "Single Step" or "Run" to execute.
 
-``` powershell
-java -cp out src.GUI
-```
+### Console Layout
+
+The GUI contains:
+
+Registers:
+- R0, R1, R2, R3
+- IX1, IX2, IX3
+
+Special Registers:
+- PC
+- MAR
+- MBR
+- IR
+
+Memory Display:
+- MEM[MAR]
+
+Buttons:
+- IPL (Load Program)
+- Single Step
+- Run
+- Reset
+
+### Operation
+
+Single Step:
+- Executes exactly one instruction.
+- Updates registers and memory display.
+
+Run:
+- Executes until HLT instruction is reached.
+
+Reset:
+- Clears registers and memory.
+
+IPL:
+- Loads a new program and resets CPU.
 
 ### Running the Simulator Test Suite
 
-To run all simulator tests:
+Each folder contains:
+- source.asm
+- expected.final (register/memory final state)
+
+To run tests:
 
 ``` powershell
 java -cp out src.SimTest
