@@ -4,19 +4,30 @@ import javax.swing.*;
 import java.awt.*;
 import java.io.File;
 
+/**
+ * GUI.java
+ * 
+ * Minimal front panel
+ */
 public class GUI extends JFrame {
+    private static final int INSTALLED_MEMORY_WORDS = 2048;
+
+    private static final int DEFAULT_ENTRY_PC = 020;
+
+    private static final int RUN_MAX_STEPS = 20000;
+
     private final Simulator simulator;
     
-    //reg displays
+    // Register displays
     private JTextField[] rDisplays = new JTextField[4];
     private JTextField[] ixDisplays = new JTextField[4];
     private JTextField pcDisplay, marDisplay, mbrDisplay, irDisplay, memAtMARDisplay;
     
-    //buttons
+    // Buttons
     private JButton iplButton, stepButton, runButton;
 
     public GUI() {
-        simulator = new Simulator(2048, 16);
+        simulator = new Simulator(INSTALLED_MEMORY_WORDS);
         
         setTitle("C6461 Simulator - Part 1");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -33,7 +44,7 @@ public class GUI extends JFrame {
     private JPanel createDisplayPanel() {
         JPanel panel = new JPanel(new GridLayout(5, 1, 5, 5));
         
-        //R0-R3
+        // R0-R3
         JPanel r = new JPanel(new FlowLayout(FlowLayout.LEFT));
         for (int i = 0; i < 4; i++) {
             r.add(new JLabel("R" + i + ":"));
@@ -43,7 +54,7 @@ public class GUI extends JFrame {
         }
         panel.add(r);
         
-        //IX1-IX3
+        // IX1-IX3
         JPanel ix = new JPanel(new FlowLayout(FlowLayout.LEFT));
         for (int i = 1; i < 4; i++) {
             ix.add(new JLabel("IX" + i + ":"));
@@ -53,7 +64,7 @@ public class GUI extends JFrame {
         }
         panel.add(ix);
         
-        //PC, MAR, MBR, IR
+        // PC, MAR, MBR, IR
         JPanel special = new JPanel(new FlowLayout(FlowLayout.LEFT));
         special.add(new JLabel("PC:"));
         pcDisplay = new JTextField(6);
@@ -77,7 +88,7 @@ public class GUI extends JFrame {
         
         panel.add(special);
         
-        //mmory at MAR display
+        // Memory at MAR display
         JPanel memPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         memPanel.add(new JLabel("MEM[MAR]:"));
         memAtMARDisplay = new JTextField(6);
@@ -116,8 +127,11 @@ public class GUI extends JFrame {
             try {
                 simulator.reset();
                 simulator.loadProgramFromFile(chooser.getSelectedFile().getAbsolutePath());
-                simulator.setPC(20); 
-                JOptionPane.showMessageDialog(this, "Program loaded");
+                
+                simulator.setPC(DEFAULT_ENTRY_PC);
+
+                JOptionPane.showMessageDialog(this, 
+                    "Program loaded.\nPC set to " + String.format("%04X", DEFAULT_ENTRY_PC));
                 updateDisplays();
             } catch (Exception ex) {
                 JOptionPane.showMessageDialog(this, "Error: " + ex.getMessage());
@@ -134,11 +148,9 @@ public class GUI extends JFrame {
     }
 
     private void run() {
-        while (!simulator.getCPU().isHalted()) {
-            simulator.singleStep();
-        }
+        simulator.run(RUN_MAX_STEPS);
         updateDisplays();
-        JOptionPane.showMessageDialog(this, "Halted");
+        JOptionPane.showMessageDialog(this, simulator.getCPU().isHalted() ? "Halted" : "Stopped (max steps reached)");
     }
 
     private void reset() {
