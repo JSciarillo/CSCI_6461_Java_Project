@@ -11,7 +11,6 @@ package src;
  */
 public final class Memory {
     private final int[] mem;
-
     private static final int WORD_MASK = 0xFFFF;
 
     public Memory(int sizeWords) {

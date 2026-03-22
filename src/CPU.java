@@ -24,6 +24,11 @@ public final class CPU {
     private int mar; // 12-bit
     private int mbr; // 16-bit
     private int ir;  // 16-bit
+    private int cc;
+
+    private String consoleInput = "";
+    private StringBuilder consoleOutput = new StringBuilder();
+    
 
     private boolean halted;
 
@@ -34,116 +39,344 @@ public final class CPU {
     public void reset() {
         for (int i = 0; i < R.length; i++) { R[i] = 0; }
         for (int i = 0; i < IX.length; i++) { IX[i] = 0; }
-        pc = mar = mbr = ir = 0;
+        pc = mar = mbr = ir = cc = 0;
         halted = false;
+        consoleInput = "";
+        consoleOutput.setLength(0);
     }
 
-    /**
-     * Executes ONE instruction (fetch -> decode -> execute).
-     * This is the behavior needed for "Single Step" mode in the UI.
-     */
-    public void singleStep(Memory mem){
+    public void singleStep(Cache cache){
         if (halted) return;
 
-        // ---------------
-        // FETCH
-        // ---------------
-        try {         
-            mar = pc;
-            mbr = mem.read(mar);
-            ir = mbr;
+        //fetch
+        mar = pc;
+        mbr = cache.read(mar);
+        ir = mbr;
+        pc = (pc + 1) & 0x7FF;
 
-            // PC increrments ONCE per instruction fetch
-            // Transfer instructions will override PC during execute if they branch/jump
-            pc = nextAddress(pc, mem);
+        System.out.println("Executing: PC=" + pc + " MAR=" + mar + " IR=" + String.format("%04X", ir) + " Opcode=" + ((ir >> 10) & 0x3F));
 
-            System.out.println("Executing: PC=" + pc + " MAR=" + mar + " IR=" + String.format("%04X", ir) + " Opcode=" + ((ir >> 10) & 0x3F));
+        //decode
+        int opcode = (ir >> 10) & 0x3F;
+        int r = (ir >> 8) & 0x3;
+        int ix = (ir >> 6) & 0x3;
+        int i = (ir >> 5) & 0x1;
+        int addr = ir & 0x1F;
 
-            // ---------------
-            // DECODE
-            // ---------------
-            int opcode = (ir >> 10) & 0x3F;  // 6-bit opcode
-            int rField = (ir >> 8) & 0x3;    // 2-bit register field
-            int ixField = (ir >> 6) & 0x3;   // 2-bit index seelector
-            int iField = (ir >> 5) & 0x1;    // indirect bit
-            int addr5 = ir & 0x1F;           // 5-bit address field
-
-            // ---------------
-            // EXECUTE
-            // ---------------
-            int ea = computeEA(mem, ixField, iField, addr5);
-            switch (opcode) {
-                case 0: //HLT
+        //load/store
+        int ea;
+        switch (opcode) {
+            //HLT
+            case 0:
+                halted = true;
+                break;
+            //LDR r, x, address [ I]
+            case 01:
+                ea = computeEffectiveAddress(cache, ix, i, addr);
+                R[r] = cache.read(ea);
+                break;
+            case 02:
+                ea = computeEffectiveAddress(cache, ix, i, addr);
+                cache.write(ea, R[r]);
+                break;
+            case 03:
+                ea = computeEffectiveAddress(cache, ix, i, addr);
+                R[r] = ea;
+                break;
+            case 041: // LDX x,address[,I]
+                if (ix == 0) {
+                    System.err.println("Illegal LDX: x cannot be 0 (no IX0).");
                     halted = true;
-                    return;
-                case 01: //LDR r, x, address[,I]
-                    R[rField] = mem.read(ea) & WORD_MASK;
-                    return;
-                case 02: // STR r, x, address[,I]
-                    mem.write(ea, R[rField]);
-                    return;
-                case 03: // LDA r, x, address[,I] => r <- EA
-                    R[rField] = ea & WORD_MASK;
-                    return;
-                case 041: // LDX x, address[,I] (x = 1..3) => Xx <- c(EA)
-                    // LDX uses the IX field to specify which index register to load.
-                    // rField is ignored for this instruction.
-                    if (ixField == 0) {
-                        // No X0 exists; treat as illegal usage for LDX
-                        System.err.println("Illegal LDX: x cannot be 0 (no IX0).");
-                        halted = true;
-                        return;
-                    }
-                    IX[ixField] = mem.read(ea) & WORD_MASK;
-                    return;
-                case 042: // STX x, address[,I] (x = 1..3) => c(EA) <- Xx
-                    if (ixField == 0) {
-                        // No X0 exists; treat as illegal usage for STX
-                        System.err.println("Illegal STX: x cannot be 0 (no IX0).");
-                        halted = true;
-                        return;
-                    }
-                    mem.write(ea, IX[ixField]);
-                    return;
-                default:
-                    //for unknown opcode
-                    System.err.println("Unknown opcode: " + String.format("%02o", opcode));
+                    break;
+                }
+                ea = addr; // DO NOT index by IX[x]
+                if (i == 1) {
+                    ea = cache.read(ea) & 0x7FF;
+                }
+                IX[ix] = cache.read(ea) & 0xFFFF;
+                break;
+
+            case 042: // STX x,address[,I]
+                if (ix == 0) {
+                    System.err.println("Illegal STX: x cannot be 0 (no IX0).");
                     halted = true;
-            }
-        } catch (IndexOutOfBoundsException ex) {
-            System.err.println("Memory Fault: " + ex.getMessage());
-            halted = true;
+                    break;
+                }
+                ea = addr; // DO NOT index by IX[x]
+                if (i == 1) {
+                    ea = cache.read(ea) & 0x7FF;
+                }
+                cache.write(ea, IX[ix]);
+                break;
+            //artihmetic instructions
+            case 04:
+                ea = computeEffectiveAddress(cache, ix, i, addr);
+                int memVal = cache.read(ea);
+                int result = R[r] + memVal;
+                
+                //checks for overflow
+                if (result > 32767 || result < -32768) {
+                    setOverflow(true);
+                } else {
+                    setOverflow(false);
+                }
+                
+                R[r] = result & 0xFFFF;
+                break;
+            case 05:
+                ea = computeEffectiveAddress(cache, ix, i, addr);
+                memVal = cache.read(ea);
+                result = R[r] - memVal;
+                //checks for underflow
+                if (result < -32768) {
+                    setUnderflow(true);
+                } else {
+                    setUnderflow(false);
+                }
+                
+                R[r] = result & 0xFFFF;
+                break;
+            case 06:
+                int immed = addr;
+                result = R[r] + immed;
+                
+                if (result > 32767 || result < -32768) {
+                    setOverflow(true);
+                } else {
+                    setOverflow(false);
+                }
+                
+                R[r] = result & 0xFFFF;
+                break;
+
+            case 07:
+                immed = addr;
+                result = R[r] - immed;
+                
+                if (result < -32768) {
+                    setUnderflow(true);
+                } else {
+                    setUnderflow(false);
+                }
+                
+                R[r] = result & 0xFFFF;
+                break;
+
+            //transfer instructions
+            case 010:
+                ea = computeEffectiveAddress(cache, ix, i, addr);
+                if (R[r] == 0) {
+                    pc = ea;
+                }
+                break;
+
+            case 011:
+                ea = computeEffectiveAddress(cache, ix, i, addr);
+                if (R[r] != 0) {
+                    pc = ea;
+                }
+                break;
+
+            case 012:
+                ea = computeEffectiveAddress(cache, ix, i, addr);
+                boolean ccBit = (cc & (1 << r)) != 0;
+                if (ccBit) {
+                    pc = ea;
+                }
+                break;
+
+            case 013:
+                ea = computeEffectiveAddress(cache, ix, i, addr);
+                pc = ea;
+                break;
+            case 014:
+                ea = computeEffectiveAddress(cache, ix, i, addr);
+                R[3] = pc;  
+                pc = ea;
+                break;
+
+            case 015:
+                immed = addr;  
+                R[0] = immed;
+                pc = R[3];
+                break;
+
+            case 016:
+                ea = computeEffectiveAddress(cache, ix, i, addr);
+                R[r] = (R[r] - 1) & 0xFFFF;
+                if (R[r] > 0) {
+                    pc = ea;
+                }
+                break;
+
+            case 017:
+                ea = computeEffectiveAddress(cache, ix, i, addr);
+                int signedVal = (short)R[r];
+                if (signedVal >= 0) {
+                    pc = ea;
+                }
+                break;
+
+            //register-to-register operations
+            case 070:
+                int ry = (ir >> 6) & 0x3; 
+                if ((r != 0 && r != 2) || (ry != 0 && ry != 2)) {
+                    System.err.println("MLT: rx and ry must be 0 or 2");
+                    halted = true;
+                    break;
+                }
+                int product = R[r] * R[ry];
+                R[r] = (product >> 16) & 0xFFFF;
+                R[r + 1] = product & 0xFFFF;
+                
+                //checks overflow
+                if (product > 0x7FFFFFFF || product < -0x80000000) {
+                    setOverflow(true);
+                } else {
+                    setOverflow(false);
+                }
+                break;
+
+            case 071:
+                ry = (ir >> 6) & 0x3;
+                if ((r != 0 && r != 2) || (ry != 0 && ry != 2)) {
+                    System.err.println("DVD: rx and ry must be 0 or 2");
+                    halted = true;
+                    break;
+                }
+                
+                if (R[ry] == 0) {
+                    setDivZero(true);
+                    break;
+                }
+                
+                setDivZero(false);
+                int quotient = R[r] / R[ry];
+                int remainder = R[r] % R[ry];
+                R[r] = quotient & 0xFFFF; 
+                R[r + 1] = remainder & 0xFFFF;
+                break;
+            case 072:
+                ry = (ir >> 6) & 0x3;
+                if (R[r] == R[ry]) {
+                    setEqualOrNot(true);
+                } else {
+                    setEqualOrNot(false);
+                }
+                break;
+            case 073:
+                ry = (ir >> 6) & 0x3;
+                R[r] = (R[r] & R[ry]) & 0xFFFF;
+                break;
+            case 074:
+                ry = (ir >> 6) & 0x3;
+                R[r] = (R[r] | R[ry]) & 0xFFFF;
+                break;
+
+            case 075:
+                R[r] = (~R[r]) & 0xFFFF;
+                break;
+            //shift
+            case 031:
+                int count = ir & 0xF;  
+                int lr = (ir >> 6) & 0x1;
+                int al = (ir >> 7) & 0x1;
+                
+                if (count == 0) 
+                    break;
+                
+                int value = R[r];
+                
+                if (lr == 1) {  //shift left
+                    value = (value << count) & 0xFFFF;
+                } else {  //shift right
+                    if (al == 0) {  //arithmetic shift
+                        short signedValue = (short)value;
+                        signedValue >>= count;  //arithmetic right shift
+                        value = signedValue & 0xFFFF;
+                    } else {  //logical shift, fills w zeros
+                        value = (value >>> count) & 0xFFFF;
+                    }
+                }
+                
+                R[r] = value;
+                break;
+
+            //rotate register by count
+            case 032:
+                count = ir & 0xF;
+                lr = (ir >> 6) & 0x1;
+                if (count == 0) break; 
+                
+                value = R[r];
+                
+                if (lr == 1) {  //rotate lefr
+                    value = ((value << count) | (value >>> (16 - count))) & 0xFFFF;
+                } else {  //rotate right
+                    value = ((value >>> count) | (value << (16 - count))) & 0xFFFF;
+                }
+                
+                R[r] = value;
+                break;
+            case 061:
+                int devid = addr;
+                
+                if (devid == 0) {
+                    if (consoleInput.length() > 0) {
+                        char ch = consoleInput.charAt(0);
+                        consoleInput = consoleInput.substring(1);
+                        R[r] = ch & 0xFFFF;
+                    } else {
+                        R[r] = 0;
+                    }
+                } else {
+                    R[r] = 0;
+                }
+                break;
+
+            case 062:
+                devid = addr;
+                
+                if (devid == 1) { 
+                    char ch = (char)(R[r] & 0xFF);
+                    consoleOutput.append(ch);
+                }
+                break;
+
+            case 063:
+                int devidChk = addr;
+                if (devidChk == 0 || devidChk == 1 || devidChk == 2) {
+                    R[r] = 1; // ready
+                } else {
+                    R[r] = 0;
+                }
+                break;
+
+            default:
+                // for unknown opcode
+                System.err.println("Unknown opcode: " + String.format("%02o", opcode));
+                halted = true;
         }
     }
 
-    /**
-     * Effective Address computation:
-     * - If IX=0: EA = AddressField (5-bit value 0..31)
-     * - Else:    EA = c(IX) + AddressField
-     * - If I=1:  EA = c(EA)  (indirect)
-     */
-    private int computeEA(Memory mem, int ixField, int iField, int addressField) {
-        int ea = addressField & 0x1F;
+    private int computeEffectiveAddress(Cache cache, int ixField, int iField, int addressField) {
+        int ea;
 
-        // Indexing: add IX1...IX3 if selected
-        if (ixField != 0) {
-            ea = ea + (IX[ixField] & WORD_MASK);
+        //Indexing
+        if (ixField == 0) {
+            ea = addressField;
+        }
+        else {
+            ea = (IX[ixField] + addressField) & 0x7FF;
         }
 
         // Bound to installed memory range by letting Memory enforce bounds.
         // Idirect: EA <- M[EA]
         if (iField == 1) {
-            ea = mem.read(ea) & WORD_MASK;
+            ea = cache.read(ea) & 0x7FF;
         }
 
         return ea;
-    }
-    
-    private static int nextAddress(int currentPC, Memory mem) {
-        // Installed memory is 0...(size-1)
-        int next = currentPC + 1;
-        if (next >= mem.size()) next = 0;
-        return next;
     }
 
     // ---------------
@@ -177,6 +410,48 @@ public final class CPU {
         if (idx < 0 || idx > 3) throw new IllegalArgumentException("IX index out of range");
         if (idx == 0) throw new IllegalArgumentException("IX0 does not exist; valid IX index is 1..3");
         IX[idx] = value & WORD_MASK;
+    }
+
+
+    //I/O methods
+    public void setConsoleInput(String input) {
+        this.consoleInput = input;
+    }
+
+    public String getConsoleOutput() {
+        return consoleOutput.toString();
+    }
+
+    public void clearConsoleOutput() {
+        consoleOutput.setLength(0);
+    }
+
+    //CC methods
+    public int getCC() { return cc; }
+    
+    public boolean getOverflow() { return (cc & 0x1) != 0; }
+    public boolean getUnderflow() { return (cc & 0x2) != 0; }
+    public boolean getDivZero() { return (cc & 0x4) != 0; }
+    public boolean getEqualOrNot() { return (cc & 0x8) != 0; }
+    
+    public void setOverflow(boolean val) {
+        if (val) cc |= 0x1; else cc &= ~0x1;
+    }
+    
+    public void setUnderflow(boolean val) {
+        if (val) cc |= 0x2; else cc &= ~0x2;
+    }
+    
+    public void setDivZero(boolean val) {
+        if (val) cc |= 0x4; else cc &= ~0x4;
+    }
+    
+    public void setEqualOrNot(boolean val) {
+        if (val) cc |= 0x8; else cc &= ~0x8;
+    }
+    
+    public void clearCC() {
+        cc = 0;
     }
 
     public boolean isHalted() { return halted; }

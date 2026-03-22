@@ -1,0 +1,87 @@
+LOC 0
+INDEX:      DATA 0
+TARGET:     DATA 0
+BESTDIFF:   DATA 10
+CURRDIFF:   DATA 0
+BESTVAL:    DATA 0
+POSPTR:     DATA 35
+INCPTR:     DATA 43
+ARRBASE:    DATA 60
+
+LOC 8
+        LDR 2,0,ARRBASE
+        STR 2,0,INDEX
+        LDX 1,INDEX
+        LDA 0,0,0
+        AIR 0,20
+
+READLP: IN 2,0
+        STR 2,1,0
+        OUT 2,1
+        LDR 2,0,INDEX
+        AIR 2,1
+        STR 2,0,INDEX
+        LDX 1,INDEX
+        SIR 0,1
+        JNE 0,0,READLP
+
+        IN 2,0
+        STR 2,0,TARGET
+
+        LDR 2,0,ARRBASE
+        STR 2,0,INDEX
+        LDX 1,INDEX
+        AIR 0,20
+        LDA 2,0,10
+        STR 2,0,BESTDIFF
+
+SCAN:   LDR 2,1,0
+        SMR 2,0,TARGET
+        JGE 2,0,POSPTR,1
+        NOT 2
+        AIR 2,1
+
+POS:    STR 2,0,CURRDIFF
+        LDR 2,0,CURRDIFF
+        SMR 2,0,BESTDIFF
+        JGE 2,0,INCPTR,1
+
+        LDR 3,1,0
+        STR 3,0,BESTVAL
+        LDR 2,0,CURRDIFF
+        STR 2,0,BESTDIFF
+
+INC:    LDR 2,0,INDEX
+        AIR 2,1
+        STR 2,0,INDEX
+        LDX 1,INDEX
+        SIR 0,1
+        JNE 0,0,SCAN
+
+        LDR 2,0,TARGET
+        OUT 2,1
+        LDR 2,0,BESTVAL
+        OUT 2,1
+        HLT
+
+LOC 60
+ARRAY0:     DATA 0
+ARRAY1:     DATA 0
+ARRAY2:     DATA 0
+ARRAY3:     DATA 0
+ARRAY4:     DATA 0
+ARRAY5:     DATA 0
+ARRAY6:     DATA 0
+ARRAY7:     DATA 0
+ARRAY8:     DATA 0
+ARRAY9:     DATA 0
+ARRAY10:    DATA 0
+ARRAY11:    DATA 0
+ARRAY12:    DATA 0
+ARRAY13:    DATA 0
+ARRAY14:    DATA 0
+ARRAY15:    DATA 0
+ARRAY16:    DATA 0
+ARRAY17:    DATA 0
+ARRAY18:    DATA 0
+ARRAY19:    DATA 0
