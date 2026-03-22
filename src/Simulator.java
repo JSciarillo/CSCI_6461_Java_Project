@@ -28,10 +28,6 @@ public final class Simulator {
         cache.reset();
     }
 
-    public void loadProgramFromFile(String filename) throws IOException {
-        mem.clear();
-    }
-
     /**
      * Load a program from a "Load.txt"-style file:
      * each line: "<octalAddr> <octalWord>"
@@ -89,7 +85,7 @@ public final class Simulator {
     public void run(int maxSteps) {
         int steps = 0;
         while (!cpu.isHalted() && steps < maxSteps) {
-            cpu.singleStep(mem);
+            cpu.singleStep(cache);
             steps++;
         }
         if(!cpu.isHalted()) {
