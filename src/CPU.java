@@ -41,6 +41,8 @@ public final class CPU {
         for (int i = 0; i < IX.length; i++) { IX[i] = 0; }
         pc = mar = mbr = ir = cc = 0;
         halted = false;
+        consoleInput = "";
+        consoleOutput.setLength(0);
     }
 
     public void singleStep(Cache cache){
@@ -81,13 +83,23 @@ public final class CPU {
                 ea = computeEffectiveAddress(cache, ix, i, addr);
                 R[r] = ea;
                 break;
-            case 041:
+            case 041: // LDX
                 ea = computeEffectiveAddress(cache, ix, i, addr);
-                IX[r] = cache.read(ea);
+                if (ix == 0) {
+                    System.err.println("Illegal LDX: x cannot be 0 (no IX0).");
+                    halted = true;
+                    break;
+                }
+                IX[ix] = cache.read(ea) & WORD_MASK;
                 break;
-            case 042:
+            case 042: // STX
                 ea = computeEffectiveAddress(cache, ix, i, addr);
-                cache.write(ea, IX[r]);
+                if (ix == 0) {
+                    System.err.println("Illegal STX: x cannot be 0 (no IX0).");
+                    halted = true;
+                    break;
+                }
+                cache.write(ea, IX[ix]);
                 break;
             //artihmetic instructions
             case 04:
@@ -358,13 +370,6 @@ public final class CPU {
         }
 
         return ea;
-    }
-    
-    private static int nextAddress(int currentPC, Memory mem) {
-        // Installed memory is 0...(size-1)
-        int next = currentPC + 1;
-        if (next >= mem.size()) next = 0;
-        return next;
     }
 
     // ---------------
