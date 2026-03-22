@@ -11,12 +11,14 @@ package src;
  */
 public final class Memory {
     private final int[] mem;
+    private final int wordMask;
 
     private static final int WORD_MASK = 0xFFFF;
 
     public Memory(int sizeWords) {
         if (sizeWords <= 0) throw new IllegalArgumentException("sizeWords must be > 0");
         this.mem = new int[sizeWords];
+        this.wordMask = (1 << wordBits) - 1;
     }
 
     public int size() { return mem.length; }

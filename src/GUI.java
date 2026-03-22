@@ -2,6 +2,7 @@ package src;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.*;
 import java.io.File;
 import java.util.Locale;
 import java.util.List;
@@ -24,18 +25,36 @@ public class GUI extends JFrame {
     private JTextField[] rDisplays = new JTextField[4];
     private JTextField[] ixDisplays = new JTextField[4];
     private JTextField pcDisplay, marDisplay, mbrDisplay, irDisplay, memAtMARDisplay;
+    private JTextField ccDisplay;
     
-    // Buttons
+    //Console I/O
+    private JTextArea consoleOutput;
+    private JTextField consoleInput;
+    private JButton sendInputButton;
+    
+    //Cache display
+    private JTextArea cacheDisplay;
+    
+    //Buttons
     private JButton iplButton, stepButton, runButton;
 
     public GUI() {
         simulator = new Simulator(INSTALLED_MEMORY_WORDS);
         
-        setTitle("C6461 Simulator - Part 1");
+        setTitle("C6461 Simulator - Part 2");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setLayout(new BorderLayout(10, 10));
+        setLayout(new BorderLayout(0, 0));
         
-        add(createDisplayPanel(), BorderLayout.CENTER);
+        //Top: Registers
+        add(createDisplayPanel(), BorderLayout.NORTH);
+        
+        //Center: Console I/O and Cache side by side
+        JPanel centerPanel = new JPanel(new GridLayout(1, 2, 10, 0));
+        centerPanel.add(createConsolePanel());
+        centerPanel.add(createCachePanel());
+        add(centerPanel, BorderLayout.CENTER);
+        
+        //Bottom: Buttons
         add(createButtonPanel(), BorderLayout.SOUTH);
         
         pack();
@@ -44,7 +63,7 @@ public class GUI extends JFrame {
     }
 
     private JPanel createDisplayPanel() {
-        JPanel panel = new JPanel(new GridLayout(5, 1, 5, 5));
+        JPanel panel = new JPanel(new GridLayout(6, 1, 5, 5));
         
         // R0-R3
         JPanel r = new JPanel(new FlowLayout(FlowLayout.LEFT));
@@ -90,13 +109,69 @@ public class GUI extends JFrame {
         
         panel.add(special);
         
-        // Memory at MAR display
-        JPanel memPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        memPanel.add(new JLabel("MEM[MAR]:"));
+        //Memory at MAR + CC
+        JPanel memCC = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        memCC.add(new JLabel("MEM[MAR]:"));
         memAtMARDisplay = new JTextField(6);
         memAtMARDisplay.setEditable(false);
-        memPanel.add(memAtMARDisplay);
-        panel.add(memPanel);
+        memCC.add(memAtMARDisplay);
+        
+        memCC.add(new JLabel("  CC:"));
+        ccDisplay = new JTextField(10);
+        ccDisplay.setEditable(false);
+        memCC.add(ccDisplay);
+        
+        panel.add(memCC);
+        
+        return panel;
+    }
+
+    //Console I/O Panel
+    private JPanel createConsolePanel() {
+        JPanel panel = new JPanel(new BorderLayout(3, 3));
+        panel.setBorder(BorderFactory.createTitledBorder("Console I/O"));
+        
+        //Output area
+        JPanel outputPanel = new JPanel(new BorderLayout());
+        outputPanel.setBorder(BorderFactory.createTitledBorder("Console Printer (Output)"));
+        consoleOutput = new JTextArea(5, 30);
+        consoleOutput.setEditable(false);
+        consoleOutput.setFont(new Font("Monospaced", Font.PLAIN, 11));
+        JScrollPane outputScroll = new JScrollPane(consoleOutput);
+        outputPanel.add(outputScroll);
+        panel.add(outputPanel, BorderLayout.CENTER);
+        
+        //Input area
+        JPanel inputPanel = new JPanel(new BorderLayout(3, 3));
+        inputPanel.setBorder(BorderFactory.createTitledBorder("Console Keyboard (Input)"));
+        consoleInput = new JTextField(25);
+        consoleInput.setFont(new Font("Monospaced", Font.PLAIN, 11));
+        sendInputButton = new JButton("Send");
+        sendInputButton.addActionListener(e -> sendInput());
+        
+        JPanel inputControls = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        inputControls.add(new JLabel("Input:"));
+        inputControls.add(consoleInput);
+        inputControls.add(sendInputButton);
+        inputPanel.add(inputControls);
+        
+        panel.add(inputPanel, BorderLayout.SOUTH);
+        
+        return panel;
+    }
+
+    //Cache Panel
+    private JPanel createCachePanel() {
+        JPanel panel = new JPanel(new BorderLayout(3, 3));
+        panel.setBorder(BorderFactory.createTitledBorder("Cache Content"));
+        
+        cacheDisplay = new JTextArea(8, 40);
+        cacheDisplay.setEditable(false);
+        cacheDisplay.setFont(new Font("Monospaced", Font.PLAIN, 10));
+        JScrollPane cacheScroll = new JScrollPane(cacheDisplay);
+        panel.add(cacheScroll);
+        
+        cacheDisplay.setText("");
         
         return panel;
     }
@@ -119,6 +194,10 @@ public class GUI extends JFrame {
         JButton resetButton = new JButton("Reset");
         resetButton.addActionListener(e -> reset());
         panel.add(resetButton);
+        
+        JButton clearConsoleButton = new JButton("Clear Console");
+        clearConsoleButton.addActionListener(e -> clearConsole());
+        panel.add(clearConsoleButton);
         
         return panel;
     }
@@ -216,6 +295,19 @@ public class GUI extends JFrame {
     private void reset() {
         simulator.reset();
         updateDisplays();
+        clearConsole();
+    }
+    
+    private void sendInput() {
+        String input = consoleInput.getText();
+        simulator.getCPU().setConsoleInput(input);
+        consoleInput.setText("");
+        updateDisplays();
+    }
+    
+    private void clearConsole() {
+        consoleOutput.setText("");
+        simulator.getCPU().clearConsoleOutput();
     }
 
     private void updateDisplays() {
@@ -234,11 +326,51 @@ public class GUI extends JFrame {
         mbrDisplay.setText(String.format("%04X", cpu.getMBR()));
         irDisplay.setText(String.format("%04X", cpu.getIR()));
         
+        // Update CC display
+        int cc = cpu.getCC();
+        String ccStr = Integer.toBinaryString(0x10 | cc).substring(1) + " (";
+        if (cpu.getOverflow()) ccStr += "O";
+        if (cpu.getUnderflow()) ccStr += "U";
+        if (cpu.getDivZero()) ccStr += "D";
+        if (cpu.getEqualOrNot()) ccStr += "E";
+        if (cc == 0) ccStr += "-";
+        ccStr += ")";
+        ccDisplay.setText(ccStr);
+        
+        // Update console output
+        consoleOutput.setText(cpu.getConsoleOutput());
+        
+        updateCacheDisplay();
+        
         try {
             memAtMARDisplay.setText(String.format("%04X", simulator.getMemoryAtMAR()));
         } catch (Exception e) {
             memAtMARDisplay.setText("----");
         }
+    }
+
+    private void updateCacheDisplay() {
+        Cache cache = simulator.getCache();
+        CacheLine[] lines = cache.getLines();
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("Idx  V   Addr   Data   FIFO\n");
+        sb.append("--------------------------------\n");
+
+        for (int i = 0; i < lines.length; i++) {
+            CacheLine line = lines[i];
+            sb.append(String.format(
+                    "%2d   %d   %04X   %04X   %d%n",
+                    i,
+                    line.valid ? 1 : 0,
+                    line.address & 0xFFFF,
+                    line.data & 0xFFFF,
+                    line.fifoOrder));
+        }
+
+        sb.append("\n");
+        sb.append(cache.getLastAccessSummary());
+        cacheDisplay.setText(sb.toString());
     }
 
     public static void main(String[] args) {
