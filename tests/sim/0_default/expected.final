@@ -1,0 +1,31 @@
+; Final state after executing to HLT
+; Program:
+;   R0 <- M[6]  (42)
+;   M[10] <- R0
+;   R1 <- EA(25)
+;   IX1 <- M[7] (100)
+;   M[11] <- IX1
+;
+; All values in HEX.
+
+R0=002A
+R1=0019
+R2=0000
+R3=0000
+
+IX1=0064
+IX2=0000
+IX3=0000
+
+; After fetching HLT at address 25, PC increments to 26
+PC=001A
+MAR=0019
+IR=0000
+
+MEM[000A]=002A
+MEM[000B]=0064
+
+; Optional sanity checks (your original data)
+MEM[0006]=002A
+MEM[0007]=0064
+MEM[0008]=000F

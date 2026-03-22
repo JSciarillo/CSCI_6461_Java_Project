@@ -1,19 +1,40 @@
 package src;
 
+/**
+ * CPU.java
+ * 
+ * Implements the core fetch/decode/execute cycle of the CPU.
+ * 
+ * ISA Notes:
+ * - 16-bit words
+ * - PC/MAR are 12-bit conceptually, but we only install 2048 words
+ * - Load/Store/Transfer format uses a 5-bit address field
+ * - Indexing (IX1...IX3) is used to reach the rest of memory
+ * - IX field value 0 => no indexing. There is no IX0 register.
+ * 
+ * Part I scope: implement HLT + LOAD/STORE (LDR/STR/LDA/LDX/STX).
+ */
 public final class CPU {
+    // Program-visible registers
     private final int[] R = new int[4]; // R0 - R3
     private final int[] IX = new int[4];
 
-    private int pc;
-    private int mar;
-    private int mbr;
-    private int ir;
+    // Internal registers
+    private int pc;  // 12-bit
+    private int mar; // 12-bit
+    private int mbr; // 16-bit
+    private int ir;  // 16-bit
     private int cc;
 
     private String consoleInput = "";
     private StringBuilder consoleOutput = new StringBuilder();
+    
 
     private boolean halted;
+
+    // Masks
+    private static final int WORD_MASK = 0xFFFF;
+
 
     public void reset() {
         for (int i = 0; i < R.length; i++) { R[i] = 0; }
@@ -330,7 +351,8 @@ public final class CPU {
             ea = (IX[ixField] + addressField) & 0x7FF;
         }
 
-        //Indirect addressing
+        // Bound to installed memory range by letting Memory enforce bounds.
+        // Idirect: EA <- M[EA]
         if (iField == 1) {
             ea = cache.read(ea) & 0x7FF;
         }
@@ -338,43 +360,44 @@ public final class CPU {
         return ea;
     }
     
-    // private void decode(){}
-    // private void computeEffectiveAddress(){}
-    // private void execute(){}
+    private static int nextAddress(int currentPC, Memory mem) {
+        // Installed memory is 0...(size-1)
+        int next = currentPC + 1;
+        if (next >= mem.size()) next = 0;
+        return next;
+    }
 
+    // ---------------
+    // Getters / setters for GUI
+    // ---------------
     public int getPC()  { return pc; }
     public int getMAR() { return mar; }
-    public int getMBR() { return mbr; }
-    public int getIR()  { return ir; }
+    public int getMBR() { return mbr & WORD_MASK; }
+    public int getIR()  { return ir & WORD_MASK; }
 
     public int getR(int idx) {
-        if (idx < 0 || idx > 3)
-            throw new IllegalArgumentException("R index out of range");
-            return R[idx];
+        if (idx < 0 || idx > 3) throw new IllegalArgumentException("R index out of range");
+        return R[idx] & WORD_MASK;
     }
 
     public int getIX(int idx) {
-        if (idx < 0 || idx > 3)
-            throw new IllegalArgumentException("IX index out of range");
-            return IX[idx];
+        if (idx < 0 || idx > 3) throw new IllegalArgumentException("IX index out of range");
+        return IX[idx] & WORD_MASK;
     }
         
-
-
-    public void setPC(int pc) { this.pc = pc; }
-
-    public boolean isHalted() { return halted; }
-    public void setHalted(boolean halted) { this.halted = halted; }
+    public void setPC(int pc) { 
+        if (pc < 0) throw new IllegalArgumentException("PC must be >= 0");
+        this.pc = pc; 
+    }
 
     public void setR(int idx, int value) {
-        if (idx < 0 || idx > 3)
-            throw new IllegalArgumentException("R index out of range");
-            R[idx] = value & 0xFFFF;
+        if (idx < 0 || idx > 3) throw new IllegalArgumentException("R index out of range");
+        R[idx] = value & WORD_MASK;
     }
     public void setIX(int idx, int value) {
         if (idx < 0 || idx > 3) throw new IllegalArgumentException("IX index out of range");
-        IX[idx] = value & 0xFFFF;
-
+        if (idx == 0) throw new IllegalArgumentException("IX0 does not exist; valid IX index is 1..3");
+        IX[idx] = value & WORD_MASK;
     }
 
 
@@ -419,4 +442,6 @@ public final class CPU {
         cc = 0;
     }
 
+    public boolean isHalted() { return halted; }
+    public void setHalted(boolean halted) { this.halted = halted; }
 }

@@ -2,33 +2,48 @@ package src;
 
 import java.io.*;
 
+/**
+ * Simulator.java
+ * 
+ * Ties CPU + Memory together and provides "front-panel style" operations:
+ * - reset (clears memory and registers)
+ * - load program from a load-file
+ * - singleStep / run
+ */
 public final class Simulator {
     private final CPU cpu;
     private final Memory mem;
     private final Cache cache;
 
-    public Simulator(int memSizeWords, int wordBits) {
+    public Simulator(int memSizeWords) {
         this.cpu = new CPU();
-        this.mem = new Memory(memSizeWords, wordBits);
+        this.mem = new Memory(memSizeWords);
         this.cache = new Cache(mem, 16); // 16 cache lines for Part II
-        this.cpu.reset();
+        reset();
     }
 
     public void reset() {
         cpu.reset();
-        for (int i = 0; i < mem.size(); i++) {
-            mem.write(i, 0);
-        }
+        mem.clear();
         cache.reset();
     }
 
     public void loadProgramFromFile(String filename) throws IOException {
+        mem.clear();
+    }
+
+    /**
+     * Load a program from a "Load.txt"-style file:
+     * each line: "<octalAddr> <octalWord>"
+     * - Blank lines allowed
+     * - Lines beginning with ';' treated as comments
+     */
+    public void loadProgramFromFile(String filename) throws IOException{
         try (BufferedReader br = new BufferedReader(new FileReader(filename))) {
-            String line;
-            while ((line = br.readLine()) != null) {
+            for (String line; (line = br.readLine()) != null; ) {
                 line = line.trim();
-                if (line.isEmpty())
-                    continue;
+                if (line.isEmpty()) continue;
+                if (line.startsWith(";")) continue;
 
                 String[] parts = line.split("\\s+");
                 if (parts.length < 2)
@@ -68,9 +83,18 @@ public final class Simulator {
         cpu.singleStep(cache);
     }
 
-    public void run() {
-        while (!cpu.isHalted()) {
-            cpu.singleStep(cache);
+    /**
+     * Runs until HALT or until maxSteps is reached
+     */
+    public void run(int maxSteps) {
+        int steps = 0;
+        while (!cpu.isHalted() && steps < maxSteps) {
+            cpu.singleStep(mem);
+            steps++;
+        }
+        if(!cpu.isHalted()) {
+            System.out.println("Run stopped after maxSteps="
+                + maxSteps + " (possible infinite loop).");
         }
     }
 
