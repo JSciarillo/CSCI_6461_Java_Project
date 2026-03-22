@@ -83,21 +83,28 @@ public final class CPU {
                 ea = computeEffectiveAddress(cache, ix, i, addr);
                 R[r] = ea;
                 break;
-            case 041: // LDX
-                ea = computeEffectiveAddress(cache, ix, i, addr);
+            case 041: // LDX x,address[,I]
                 if (ix == 0) {
                     System.err.println("Illegal LDX: x cannot be 0 (no IX0).");
                     halted = true;
                     break;
                 }
-                IX[ix] = cache.read(ea) & WORD_MASK;
+                ea = addr; // DO NOT index by IX[x]
+                if (i == 1) {
+                    ea = cache.read(ea) & 0x7FF;
+                }
+                IX[ix] = cache.read(ea) & 0xFFFF;
                 break;
-            case 042: // STX
-                ea = computeEffectiveAddress(cache, ix, i, addr);
+
+            case 042: // STX x,address[,I]
                 if (ix == 0) {
                     System.err.println("Illegal STX: x cannot be 0 (no IX0).");
                     halted = true;
                     break;
+                }
+                ea = addr; // DO NOT index by IX[x]
+                if (i == 1) {
+                    ea = cache.read(ea) & 0x7FF;
                 }
                 cache.write(ea, IX[ix]);
                 break;
