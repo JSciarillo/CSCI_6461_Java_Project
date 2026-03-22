@@ -22,12 +22,12 @@ public final class CPU {
         halted = false;
     }
 
-    public void singleStep(Memory mem){
+    public void singleStep(Cache cache){
         if (halted) return;
 
         //fetch
         mar = pc;
-        mbr = mem.read(mar);
+        mbr = cache.read(mar);
         ir = mbr;
         pc = (pc + 1) & 0x7FF;
 
@@ -49,29 +49,29 @@ public final class CPU {
                 break;
             //LDR r, x, address [ I]
             case 01:
-                ea = computeEffectiveAddress(mem, ix, i, addr);
-                R[r] = mem.read(ea);
+                ea = computeEffectiveAddress(cache, ix, i, addr);
+                R[r] = cache.read(ea);
                 break;
             case 02:
-                ea = computeEffectiveAddress(mem, ix, i, addr);
-                mem.write(ea, R[r]);
+                ea = computeEffectiveAddress(cache, ix, i, addr);
+                cache.write(ea, R[r]);
                 break;
             case 03:
-                ea = computeEffectiveAddress(mem, ix, i, addr);
+                ea = computeEffectiveAddress(cache, ix, i, addr);
                 R[r] = ea;
                 break;
             case 041:
-                ea = computeEffectiveAddress(mem, ix, i, addr);
-                IX[r] = mem.read(ea);
+                ea = computeEffectiveAddress(cache, ix, i, addr);
+                IX[r] = cache.read(ea);
                 break;
             case 042:
-                ea = computeEffectiveAddress(mem, ix, i, addr);
-                mem.write(ea, IX[r]);
+                ea = computeEffectiveAddress(cache, ix, i, addr);
+                cache.write(ea, IX[r]);
                 break;
             //artihmetic instructions
             case 04:
-                ea = computeEffectiveAddress(mem, ix, i, addr);
-                int memVal = mem.read(ea);
+                ea = computeEffectiveAddress(cache, ix, i, addr);
+                int memVal = cache.read(ea);
                 int result = R[r] + memVal;
                 
                 //checks for overflow
@@ -84,8 +84,8 @@ public final class CPU {
                 R[r] = result & 0xFFFF;
                 break;
             case 05:
-                ea = computeEffectiveAddress(mem, ix, i, addr);
-                memVal = mem.read(ea);
+                ea = computeEffectiveAddress(cache, ix, i, addr);
+                memVal = cache.read(ea);
                 result = R[r] - memVal;
                 //checks for underflow
                 if (result < -32768) {
@@ -124,21 +124,21 @@ public final class CPU {
 
             //transfer instructions
             case 010:
-                ea = computeEffectiveAddress(mem, ix, i, addr);
+                ea = computeEffectiveAddress(cache, ix, i, addr);
                 if (R[r] == 0) {
                     pc = ea;
                 }
                 break;
 
             case 011:
-                ea = computeEffectiveAddress(mem, ix, i, addr);
+                ea = computeEffectiveAddress(cache, ix, i, addr);
                 if (R[r] != 0) {
                     pc = ea;
                 }
                 break;
 
             case 012:
-                ea = computeEffectiveAddress(mem, ix, i, addr);
+                ea = computeEffectiveAddress(cache, ix, i, addr);
                 boolean ccBit = (cc & (1 << r)) != 0;
                 if (ccBit) {
                     pc = ea;
@@ -146,11 +146,11 @@ public final class CPU {
                 break;
 
             case 013:
-                ea = computeEffectiveAddress(mem, ix, i, addr);
+                ea = computeEffectiveAddress(cache, ix, i, addr);
                 pc = ea;
                 break;
             case 014:
-                ea = computeEffectiveAddress(mem, ix, i, addr);
+                ea = computeEffectiveAddress(cache, ix, i, addr);
                 R[3] = pc;  
                 pc = ea;
                 break;
@@ -162,7 +162,7 @@ public final class CPU {
                 break;
 
             case 016:
-                ea = computeEffectiveAddress(mem, ix, i, addr);
+                ea = computeEffectiveAddress(cache, ix, i, addr);
                 R[r] = (R[r] - 1) & 0xFFFF;
                 if (R[r] > 0) {
                     pc = ea;
@@ -170,7 +170,7 @@ public final class CPU {
                 break;
 
             case 017:
-                ea = computeEffectiveAddress(mem, ix, i, addr);
+                ea = computeEffectiveAddress(cache, ix, i, addr);
                 int signedVal = (short)R[r];
                 if (signedVal >= 0) {
                     pc = ea;
@@ -190,8 +190,10 @@ public final class CPU {
                 R[r + 1] = product & 0xFFFF;
                 
                 //checks overflow
-                if (product > 0xFFFFFFFF || product < 0) {
+                if (product > 0x7FFFFFFF || product < -0x80000000) {
                     setOverflow(true);
+                } else {
+                    setOverflow(false);
                 }
                 break;
 
@@ -277,39 +279,47 @@ public final class CPU {
                 R[r] = value;
                 break;
             case 061:
-            int devid = addr;
-            
-            if (devid == 0) {
-                if (consoleInput.length() > 0) {
-                    char ch = consoleInput.charAt(0);
-                    consoleInput = consoleInput.substring(1);
-                    R[r] = ch & 0xFFFF;
+                int devid = addr;
+                
+                if (devid == 0) {
+                    if (consoleInput.length() > 0) {
+                        char ch = consoleInput.charAt(0);
+                        consoleInput = consoleInput.substring(1);
+                        R[r] = ch & 0xFFFF;
+                    } else {
+                        R[r] = 0;
+                    }
                 } else {
                     R[r] = 0;
                 }
-            } else {
-                R[r] = 0;
-            }
-            break;
+                break;
 
-        case 062:
-            devid = addr;
-            
-            if (devid == 1) { 
-                char ch = (char)(R[r] & 0xFF);
-                consoleOutput.append(ch);
-            }
-            break;
+            case 062:
+                devid = addr;
+                
+                if (devid == 1) { 
+                    char ch = (char)(R[r] & 0xFF);
+                    consoleOutput.append(ch);
+                }
+                break;
+
+            case 063:
+                int devidChk = addr;
+                if (devidChk == 0 || devidChk == 1 || devidChk == 2) {
+                    R[r] = 1; // ready
+                } else {
+                    R[r] = 0;
+                }
+                break;
+
             default:
-                //for unknown opcode
+                // for unknown opcode
                 System.err.println("Unknown opcode: " + String.format("%02o", opcode));
                 halted = true;
-
         }
-
     }
 
-    private int computeEffectiveAddress(Memory mem, int ixField, int iField, int addressField) {
+    private int computeEffectiveAddress(Cache cache, int ixField, int iField, int addressField) {
         int ea;
 
         //Indexing
@@ -322,7 +332,7 @@ public final class CPU {
 
         //Indirect addressing
         if (iField == 1) {
-            ea = mem.read(ea) & 0x7FF;
+            ea = cache.read(ea) & 0x7FF;
         }
 
         return ea;

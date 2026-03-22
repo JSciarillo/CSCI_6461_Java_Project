@@ -267,13 +267,37 @@ public class GUI extends JFrame {
         // Update console output
         consoleOutput.setText(cpu.getConsoleOutput());
         
-        // Cache display stays empty for now
+        updateCacheDisplay();
         
         try {
             memAtMARDisplay.setText(String.format("%04X", simulator.getMemoryAtMAR()));
         } catch (Exception e) {
             memAtMARDisplay.setText("----");
         }
+    }
+
+    private void updateCacheDisplay() {
+        Cache cache = simulator.getCache();
+        CacheLine[] lines = cache.getLines();
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("Idx  V   Addr   Data   FIFO\n");
+        sb.append("--------------------------------\n");
+
+        for (int i = 0; i < lines.length; i++) {
+            CacheLine line = lines[i];
+            sb.append(String.format(
+                    "%2d   %d   %04X   %04X   %d%n",
+                    i,
+                    line.valid ? 1 : 0,
+                    line.address & 0xFFFF,
+                    line.data & 0xFFFF,
+                    line.fifoOrder));
+        }
+
+        sb.append("\n");
+        sb.append(cache.getLastAccessSummary());
+        cacheDisplay.setText(sb.toString());
     }
 
     public static void main(String[] args) {
