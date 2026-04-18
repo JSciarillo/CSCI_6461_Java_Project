@@ -244,8 +244,8 @@ public class GUI extends JFrame {
                 simulator.loadProgramFromFile(selected.getAbsolutePath());
 
                 // Pick an entry policy; either keep your old default or set to first non-zero location.
-                simulator.setPC(20); // octal 20 (decimal 16) — Java octal literal
-                JOptionPane.showMessageDialog(this, "Loaded load-file.\nPC set to 0020(octal).");
+                simulator.setPC(10); // decimal 30 = octal 036
+JOptionPane.showMessageDialog(this, "Loaded load-file.\nPC set to 040(octal) / 32(decimal).");
             }
 
             updateDisplays();
