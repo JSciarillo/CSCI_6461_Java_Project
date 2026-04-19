@@ -285,9 +285,7 @@ DotEntry:
 ; ------------------------------------------------------------
         LOC 256
 BoundaryCheck:
-        LDR 0,1,0             ; load paragraph char after matched word
-
-        JZ 0,3,16             ; -> FoundDispatch if paragraph ended
+        JZ 0,3,15             ; -> FoundDispatch
 
         LDR 1,0,8             ; space?
         TRR 0,1
