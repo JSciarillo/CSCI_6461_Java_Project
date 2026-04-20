@@ -1,4 +1,8 @@
-# CSCI 6461 – Program 2 Documentation
+# CSCI 6461 – Program 2 (Part III)
+
+**Team:** Oliver Krisetya, Jasmine Sciarillo, Srikar Atluri  
+**Course:** CSCI 6461 Computer Architecture  
+**Semester:** Spring 2026  
 
 ## Overview
 
