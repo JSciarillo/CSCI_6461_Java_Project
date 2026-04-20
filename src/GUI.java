@@ -22,6 +22,7 @@ public class GUI extends JFrame {
     private static final int UI_REFRESH_MS = 100;
 
     private final Simulator simulator;
+    private final TraceLogger logger;
 
     // Register displays
     private final JTextField[] rDisplays = new JTextField[4];
@@ -47,6 +48,8 @@ public class GUI extends JFrame {
 
     public GUI() {
         simulator = new Simulator(INSTALLED_MEMORY_WORDS);
+        logger = simulator.getLogger();
+        logger.log("UI", "GUI created");
 
         setTitle("C6461 Simulator - Part 3");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -151,7 +154,10 @@ public class GUI extends JFrame {
         consoleInput.setFont(new Font("Monospaced", Font.PLAIN, 11));
 
         sendInputButton = new JButton("Send Search Word");
-        sendInputButton.addActionListener(e -> sendInput());
+        sendInputButton.addActionListener(e -> {
+            logger.log("UI", "Send Search Word button pressed");
+            sendInput();
+        });
 
         JPanel inputControls = new JPanel(new FlowLayout(FlowLayout.LEFT));
         inputControls.add(new JLabel("Input:"));
@@ -179,27 +185,45 @@ public class GUI extends JFrame {
         JPanel panel = new JPanel(new FlowLayout());
 
         iplButton = new JButton("IPL (Load Program)");
-        iplButton.addActionListener(e -> loadProgram());
+        iplButton.addActionListener(e -> {
+            logger.log("UI", "IPL button pressed");
+            loadProgram();
+        });
         panel.add(iplButton);
 
         JButton loadParagraphButton = new JButton("Load Paragraph File");
-        loadParagraphButton.addActionListener(e -> loadParagraphFile());
+        loadParagraphButton.addActionListener(e -> {
+            logger.log("UI", "Load Paragraph File button pressed");
+            loadParagraphFile();
+        });
         panel.add(loadParagraphButton);
 
         stepButton = new JButton("Single Step");
-        stepButton.addActionListener(e -> singleStep());
+        stepButton.addActionListener(e -> {
+            logger.log("UI", "Single Step button pressed");
+            singleStep();
+        });
         panel.add(stepButton);
 
         runButton = new JButton("Run");
-        runButton.addActionListener(e -> runAsync());
+        runButton.addActionListener(e -> {
+            logger.log("UI", "Run button pressed");
+            runAsync();
+        });
         panel.add(runButton);
 
         JButton resetButton = new JButton("Reset");
-        resetButton.addActionListener(e -> reset());
+        resetButton.addActionListener(e -> {
+            logger.log("UI", "Reset button pressed");
+            reset();
+        });
         panel.add(resetButton);
 
         JButton clearConsoleButton = new JButton("Clear Console");
-        clearConsoleButton.addActionListener(e -> clearConsole());
+        clearConsoleButton.addActionListener(e -> {
+            logger.log("UI", "Clear Console button pressed");
+            clearConsole();
+        });
         panel.add(clearConsoleButton);
 
         return panel;
@@ -221,6 +245,7 @@ public class GUI extends JFrame {
         }
 
         File selected = chooser.getSelectedFile();
+        logger.log("UI", "Paragraph file chosen: " + selected.getAbsolutePath());
 
         try {
             simulator.loadTextFileIntoCardReader(selected.getAbsolutePath());
@@ -242,6 +267,7 @@ public class GUI extends JFrame {
         }
 
         File selected = chooser.getSelectedFile();
+        logger.log("UI", "Paragraph file chosen: " + selected.getAbsolutePath());
 
         try {
             simulator.loadTextFileIntoCardReader(selected.getAbsolutePath());
@@ -250,6 +276,7 @@ public class GUI extends JFrame {
                     "Paragraph file loaded into card reader input:\n" + selected.getName());
             updateDisplays();
         } catch (Exception ex) {
+            logger.log("UI", "Error loading paragraph file: " + ex.getMessage());
             JOptionPane.showMessageDialog(
                     this,
                     "Error loading paragraph file: " + ex.getMessage());
@@ -257,12 +284,15 @@ public class GUI extends JFrame {
     }
 
     private void loadProgram() {
+        logger.log("UI", "loadProgram() started");
+
         JFileChooser chooser = new JFileChooser(".");
         if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) {
             return;
         }
 
         File selected = chooser.getSelectedFile();
+        logger.log("UI", "Program file chosen: " + selected.getAbsolutePath());
         String name = selected.getName().toLowerCase(Locale.ROOT);
 
         try {
@@ -303,6 +333,7 @@ public class GUI extends JFrame {
                                 + String.format("%04X", simulator.getCPU().getPC()));
             }
 
+            logger.log("UI", "Program load completed");
             updateDisplays();
 
             if (name.contains("program2") || name.contains("prog2")) {
@@ -310,6 +341,7 @@ public class GUI extends JFrame {
             }
 
         } catch (Exception ex) {
+            logger.log("UI", "Program load failed: " + ex.getMessage());
             JOptionPane.showMessageDialog(this, "Error loading program: " + ex.getMessage());
         }
     }
@@ -338,9 +370,11 @@ public class GUI extends JFrame {
     }
 
     private void singleStep() {
+        logger.log("UI", String.format("singleStep() called at PC=%04o", simulator.getCPU().getPC()));
         simulator.singleStep();
         updateDisplays();
         if (simulator.getCPU().isHalted()) {
+            logger.log("UI", "CPU halted after single step");
             JOptionPane.showMessageDialog(this, "Halted");
         }
     }
@@ -350,12 +384,14 @@ public class GUI extends JFrame {
             return;
         }
 
+        logger.log("UI", "runAsync() started");
         setRunControls(true);
         refreshTimer.start();
 
         runWorker = new SwingWorker<>() {
             @Override
             protected Void doInBackground() {
+                logger.log("UI", "Background run thread started");
                 simulator.run(RUN_MAX_STEPS);
                 return null;
             }
@@ -365,6 +401,10 @@ public class GUI extends JFrame {
                 refreshTimer.stop();
                 updateDisplays();
                 setRunControls(false);
+
+                logger.log("UI", simulator.getCPU().isHalted()
+                        ? "Background run finished: halted"
+                        : "Background run finished: max steps reached");
 
                 JOptionPane.showMessageDialog(
                         GUI.this,
@@ -378,6 +418,7 @@ public class GUI extends JFrame {
     }
 
     private void reset() {
+        logger.log("UI", "reset() called");
         simulator.reset();
         clearConsole();
         updateDisplays();
@@ -386,15 +427,18 @@ public class GUI extends JFrame {
     private void sendInput() {
         String input = consoleInput.getText();
         if (input == null || input.isEmpty()) {
+            logger.log("UI", "sendInput() ignored because input box was empty");
             return;
         }
 
+        logger.log("UI", "Search word submitted: [" + input + "]");
         simulator.appendConsoleInput(input + "\n");
         consoleInput.setText("");
         updateDisplays();
     }
 
     private void clearConsole() {
+        logger.log("UI", "clearConsole() called");
         consoleOutput.setText("");
         simulator.clearConsoleOutput();
     }

@@ -36,6 +36,7 @@ public final class CPU {
     private final StringBuilder consoleOutput = new StringBuilder();
 
     private boolean halted;
+    private TraceLogger logger;
 
     private static final int WORD_MASK = 0xFFFF;
 
@@ -58,6 +59,47 @@ public final class CPU {
         consoleInput.setLength(0);
         cardReaderInput.setLength(0);
         consoleOutput.setLength(0);
+
+        log("CPU", "CPU reset: " + stateString());
+    }
+
+    public void setLogger(TraceLogger logger) {
+        this.logger = logger;
+    }
+
+    private void log(String category, String message) {
+        if (logger != null) {
+            logger.log(category, message);
+        }
+    }
+
+    private String stateString() {
+        return String.format(
+                "PC=%04o MAR=%04o MBR=%06o IR=%06o R0=%06o R1=%06o R2=%06o R3=%06o X1=%06o X2=%06o X3=%06o CC=%4s MFR=%1o",
+                pc & 0x7FF,
+                mar & 0x7FF,
+                mbr & WORD_MASK,
+                ir & WORD_MASK,
+                R[0] & WORD_MASK,
+                R[1] & WORD_MASK,
+                R[2] & WORD_MASK,
+                R[3] & WORD_MASK,
+                IX[1] & WORD_MASK,
+                IX[2] & WORD_MASK,
+                IX[3] & WORD_MASK,
+                String.format("%4s", Integer.toBinaryString(cc & 0xF)).replace(' ', '0'),
+                mfr & 0xF
+        );
+    }
+
+    private String printableChar(int value) {
+        int ch = value & 0xFF;
+        if (ch == '\n') return "\\n";
+        if (ch == '\r') return "\\r";
+        if (ch == '\t') return "\\t";
+        if (ch == 0) return "NUL";
+        if (ch < 32 || ch > 126) return "0x" + String.format("%02X", ch);
+        return Character.toString((char) ch);
     }
 
     public void singleStep(Cache cache) {
@@ -75,10 +117,9 @@ public final class CPU {
         ir = mbr;
         pc = (pc + 1) & 0x7FF; // keep within installed address range
 
-        System.out.println("Executing: PC=" + String.format("%04o", pc)
-                + " MAR=" + String.format("%04o", mar)
-                + " IR=" + String.format("%04X", ir)
-                + " Opcode=" + String.format("%02o", ((ir >> 10) & 0x3F)));
+        log("EXEC", "FETCH " + String.format("PC(next)=%04o MAR=%04o IR=%06o Opcode=%02o",
+                pc, mar, ir & WORD_MASK, ((ir >> 10) & 0x3F)));
+        log("STATE_BEFORE", stateString());
 
         // ----------------
         // Decode
@@ -89,6 +130,9 @@ public final class CPU {
         int i = (ir >> 5) & 0x1;
         int addr = ir & 0x1F;
 
+        log("DECODE", String.format("opcode=%02o r=%d ix=%d i=%d addr=%02o",
+                opcode, r, ix, i, addr));
+
         int ea;
 
         switch (opcode) {
@@ -97,6 +141,7 @@ public final class CPU {
             // =========================================================
             case 000: // HLT
                 halted = true;
+                log("EXEC", "HLT executed");
                 break;
 
             case 030: { // TRAP
@@ -420,10 +465,15 @@ public final class CPU {
 
                 if (devid == 0) { // keyboard
                     R[r] = readCharFromBuffer(consoleInput);
+                    log("IO", "IN keyboard -> R" + r + " value=" + (R[r] & WORD_MASK)
+                            + " char=[" + printableChar(R[r]) + "]");
                 } else if (devid == 2) { // card reader
                     R[r] = readCharFromBuffer(cardReaderInput);
+                    log("IO", "IN cardReader -> R" + r + " value=" + (R[r] & WORD_MASK)
+                            + " char=[" + printableChar(R[r]) + "]");
                 } else {
                     R[r] = 0;
+                    log("IO", "IN unknown device " + devid + " -> R" + r + " value=0");
                 }
                 break;
             }
@@ -436,6 +486,10 @@ public final class CPU {
                     synchronized (consoleOutput) {
                         consoleOutput.append(ch);
                     }
+                    log("IO", "OUT printer <- R" + r + " value=" + (R[r] & WORD_MASK)
+                            + " char=[" + printableChar(R[r]) + "]");
+                } else {
+                    log("IO", "OUT ignored for device " + devid + " from R" + r);
                 }
                 break;
             }
@@ -455,6 +509,8 @@ public final class CPU {
                 } else {
                     R[r] = 0;
                 }
+
+                log("IO", "CHK device " + devid + " -> R" + r + "=" + (R[r] & WORD_MASK));
                 break;
             }
 
@@ -465,6 +521,8 @@ public final class CPU {
                 signalMachineFault(FAULT_ILLEGAL_OPCODE, cache);
                 break;
         }
+
+        log("STATE_AFTER", stateString());
     }
 
     private int readCharFromBuffer(StringBuilder buffer) {
@@ -485,6 +543,7 @@ public final class CPU {
                 cardReaderInput.append(input);
             }
         }
+        log("IO", "Card reader buffer replaced. chars=" + (input == null ? 0 : input.length()));
     }
 
     private int computeEffectiveAddress(Cache cache, int ixField, int iField, int addressField) {
@@ -577,6 +636,8 @@ public final class CPU {
 
     private void signalMachineFault(int faultCode, Cache cache) {
         mfr = faultCode & 0xF;
+        log("FAULT", "Machine fault signaled code=" + faultCode
+                + " currentPC=" + String.format("%04o", pc));
 
         try {
             // Save current PC in reserved machine-fault location
@@ -600,6 +661,8 @@ public final class CPU {
     }
 
     private void executeTrap(int trapCode, Cache cache) {
+        log("TRAP", "TRAP called with code=" + trapCode);
+
         if (trapCode < 0 || trapCode > 15) {
             signalMachineFault(FAULT_ILLEGAL_TRAP, cache);
             return;
@@ -636,6 +699,8 @@ public final class CPU {
         synchronized (consoleInput) {
             consoleInput.append(input);
         }
+        log("IO", "Console input buffer appended. appended=["
+                + (input == null ? "null" : input.replace("\n", "\\n").replace("\r", "\\r")) + "]");
     }
 
     // ----------------
@@ -709,6 +774,7 @@ public final class CPU {
                 consoleInput.append(input);
             }
         }
+        log("IO", "Console input buffer replaced. chars=" + (input == null ? 0 : input.length()));
     }
 
     public String getConsoleOutput() {
@@ -721,6 +787,7 @@ public final class CPU {
         synchronized (consoleOutput) {
             consoleOutput.setLength(0);
         }
+        log("IO", "Console output buffer cleared");
     }
 
     // ----------------

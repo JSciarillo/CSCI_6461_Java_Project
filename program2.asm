@@ -31,7 +31,7 @@ NEWLINE:       DATA 10        ; 16
 CRCHR:         DATA 13        ; 17
 ZERO:          DATA 0         ; 18
 PSTART:        DATA 400       ; 19
-WSTART:        DATA 440       ; 20
+WSTART:        DATA 800       ; 20
 PTRTMP:        DATA 0         ; 21
 MAINBASE:      DATA 64        ; 22
 INPUTBASE:     DATA 96        ; 23
@@ -276,6 +276,12 @@ DotEntry:
         STR 0,0,14
         LDX 1,14
 
+        STX 1,14
+        LDR 0,0,14
+        AIR 0,1
+        STR 0,0,14
+        LDX 1,14
+
         LDX 3,24
         JMA 3,0
 
@@ -291,19 +297,19 @@ BoundaryCheck:
 
         LDR 1,0,8             ; space?
         TRR 0,1
-        JCC 3,3,15
+        JCC 3,3,16
 
         LDR 1,0,9             ; dot?
         TRR 0,1
-        JCC 3,3,15
+        JCC 3,3,16
 
         LDR 1,0,16            ; newline?
         TRR 0,1
-        JCC 3,3,15
+        JCC 3,3,16
 
         LDR 1,0,17            ; carriage return?
         TRR 0,1
-        JCC 3,3,15
+        JCC 3,3,16
 
         LDX 3,29              ; X3 <- MISMATCHBASE
         JMA 3,0
@@ -407,6 +413,12 @@ MismatchDot:
         STR 0,0,13            ; WORDNUM <- 1
 
         STX 1,14              ; TMP1 <- X1
+        LDR 0,0,14
+        AIR 0,1
+        STR 0,0,14
+        LDX 1,14
+
+        STX 1,14
         LDR 0,0,14
         AIR 0,1
         STR 0,0,14
