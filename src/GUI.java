@@ -2,70 +2,78 @@ package src;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.*;
 import java.io.File;
-import java.util.Locale;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * GUI.java
- * 
- * Minimal front panel
+ *
+ * Front panel for the simulator.
+ *
+ * Key fixes:
+ * - Run executes on a background thread so the GUI stays responsive.
+ * - User can send search-word input while Program 2 is waiting on IN 0,0.
+ * - Input is sent without trimming.
  */
 public class GUI extends JFrame {
     private static final int INSTALLED_MEMORY_WORDS = 2048;
-
-    private static final int DEFAULT_ENTRY_PC = 020;
-
     private static final int RUN_MAX_STEPS = 20000;
+    private static final int UI_REFRESH_MS = 100;
 
     private final Simulator simulator;
-    
+    private final TraceLogger logger;
+
     // Register displays
-    private JTextField[] rDisplays = new JTextField[4];
-    private JTextField[] ixDisplays = new JTextField[4];
+    private final JTextField[] rDisplays = new JTextField[4];
+    private final JTextField[] ixDisplays = new JTextField[4];
     private JTextField pcDisplay, marDisplay, mbrDisplay, irDisplay, memAtMARDisplay;
-    private JTextField ccDisplay;
-    
-    //Console I/O
+    private JTextField ccDisplay, mfrDisplay;
+
+    // Console I/O
     private JTextArea consoleOutput;
     private JTextField consoleInput;
     private JButton sendInputButton;
-    
-    //Cache display
+
+    // Cache display
     private JTextArea cacheDisplay;
-    
-    //Buttons
+
+    // Buttons
     private JButton iplButton, stepButton, runButton;
+
+    // Background execution
+    private volatile boolean runInProgress = false;
+    private SwingWorker<Void, Void> runWorker;
+    private Timer refreshTimer;
 
     public GUI() {
         simulator = new Simulator(INSTALLED_MEMORY_WORDS);
-        
-        setTitle("C6461 Simulator - Part 2");
+        logger = simulator.getLogger();
+        logger.log("UI", "GUI created");
+
+        setTitle("C6461 Simulator - Part 3");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLayout(new BorderLayout(0, 0));
-        
-        //Top: Registers
+
         add(createDisplayPanel(), BorderLayout.NORTH);
-        
-        //Center: Console I/O and Cache side by side
+
         JPanel centerPanel = new JPanel(new GridLayout(1, 2, 10, 0));
         centerPanel.add(createConsolePanel());
         centerPanel.add(createCachePanel());
         add(centerPanel, BorderLayout.CENTER);
-        
-        //Bottom: Buttons
+
         add(createButtonPanel(), BorderLayout.SOUTH);
-        
+
         pack();
         setLocationRelativeTo(null);
+
+        refreshTimer = new Timer(UI_REFRESH_MS, e -> updateDisplays());
         updateDisplays();
     }
 
     private JPanel createDisplayPanel() {
-        JPanel panel = new JPanel(new GridLayout(6, 1, 5, 5));
-        
-        // R0-R3
+        JPanel panel = new JPanel(new GridLayout(4, 1, 5, 5));
+
         JPanel r = new JPanel(new FlowLayout(FlowLayout.LEFT));
         for (int i = 0; i < 4; i++) {
             r.add(new JLabel("R" + i + ":"));
@@ -74,8 +82,7 @@ public class GUI extends JFrame {
             r.add(rDisplays[i]);
         }
         panel.add(r);
-        
-        // IX1-IX3
+
         JPanel ix = new JPanel(new FlowLayout(FlowLayout.LEFT));
         for (int i = 1; i < 4; i++) {
             ix.add(new JLabel("IX" + i + ":"));
@@ -84,136 +91,214 @@ public class GUI extends JFrame {
             ix.add(ixDisplays[i]);
         }
         panel.add(ix);
-        
-        // PC, MAR, MBR, IR
+
         JPanel special = new JPanel(new FlowLayout(FlowLayout.LEFT));
         special.add(new JLabel("PC:"));
         pcDisplay = new JTextField(6);
         pcDisplay.setEditable(false);
         special.add(pcDisplay);
-        
+
         special.add(new JLabel("MAR:"));
         marDisplay = new JTextField(6);
         marDisplay.setEditable(false);
         special.add(marDisplay);
-        
+
         special.add(new JLabel("MBR:"));
         mbrDisplay = new JTextField(6);
         mbrDisplay.setEditable(false);
         special.add(mbrDisplay);
-        
+
         special.add(new JLabel("IR:"));
         irDisplay = new JTextField(6);
         irDisplay.setEditable(false);
         special.add(irDisplay);
-        
+
         panel.add(special);
-        
-        //Memory at MAR + CC
+
         JPanel memCC = new JPanel(new FlowLayout(FlowLayout.LEFT));
         memCC.add(new JLabel("MEM[MAR]:"));
         memAtMARDisplay = new JTextField(6);
         memAtMARDisplay.setEditable(false);
         memCC.add(memAtMARDisplay);
-        
+
         memCC.add(new JLabel("  CC:"));
         ccDisplay = new JTextField(10);
         ccDisplay.setEditable(false);
         memCC.add(ccDisplay);
-        
+
+        memCC.add(new JLabel("  MFR:"));
+        mfrDisplay = new JTextField(4);
+        mfrDisplay.setEditable(false);
+        memCC.add(mfrDisplay);
+
         panel.add(memCC);
-        
+
         return panel;
     }
 
-    //Console I/O Panel
     private JPanel createConsolePanel() {
         JPanel panel = new JPanel(new BorderLayout(3, 3));
         panel.setBorder(BorderFactory.createTitledBorder("Console I/O"));
-        
-        //Output area
+
         JPanel outputPanel = new JPanel(new BorderLayout());
         outputPanel.setBorder(BorderFactory.createTitledBorder("Console Printer (Output)"));
-        consoleOutput = new JTextArea(5, 30);
+        consoleOutput = new JTextArea(8, 30);
         consoleOutput.setEditable(false);
         consoleOutput.setFont(new Font("Monospaced", Font.PLAIN, 11));
-        JScrollPane outputScroll = new JScrollPane(consoleOutput);
-        outputPanel.add(outputScroll);
+        outputPanel.add(new JScrollPane(consoleOutput), BorderLayout.CENTER);
         panel.add(outputPanel, BorderLayout.CENTER);
-        
-        //Input area
+
         JPanel inputPanel = new JPanel(new BorderLayout(3, 3));
-        inputPanel.setBorder(BorderFactory.createTitledBorder("Console Keyboard (Input)"));
+        inputPanel.setBorder(BorderFactory.createTitledBorder("Search Word Input"));
         consoleInput = new JTextField(25);
         consoleInput.setFont(new Font("Monospaced", Font.PLAIN, 11));
-        sendInputButton = new JButton("Send");
-        sendInputButton.addActionListener(e -> sendInput());
-        
+
+        sendInputButton = new JButton("Send Search Word");
+        sendInputButton.addActionListener(e -> {
+            logger.log("UI", "Send Search Word button pressed");
+            sendInput();
+        });
+
         JPanel inputControls = new JPanel(new FlowLayout(FlowLayout.LEFT));
         inputControls.add(new JLabel("Input:"));
         inputControls.add(consoleInput);
         inputControls.add(sendInputButton);
-        inputPanel.add(inputControls);
-        
+        inputPanel.add(inputControls, BorderLayout.CENTER);
+
         panel.add(inputPanel, BorderLayout.SOUTH);
-        
         return panel;
     }
 
-    //Cache Panel
     private JPanel createCachePanel() {
         JPanel panel = new JPanel(new BorderLayout(3, 3));
         panel.setBorder(BorderFactory.createTitledBorder("Cache Content"));
-        
-        cacheDisplay = new JTextArea(8, 40);
+
+        cacheDisplay = new JTextArea(12, 40);
         cacheDisplay.setEditable(false);
         cacheDisplay.setFont(new Font("Monospaced", Font.PLAIN, 10));
-        JScrollPane cacheScroll = new JScrollPane(cacheDisplay);
-        panel.add(cacheScroll);
-        
-        cacheDisplay.setText("");
-        
+        panel.add(new JScrollPane(cacheDisplay), BorderLayout.CENTER);
+
         return panel;
     }
 
     private JPanel createButtonPanel() {
         JPanel panel = new JPanel(new FlowLayout());
-        
+
         iplButton = new JButton("IPL (Load Program)");
-        iplButton.addActionListener(e -> loadProgram());
+        iplButton.addActionListener(e -> {
+            logger.log("UI", "IPL button pressed");
+            loadProgram();
+        });
         panel.add(iplButton);
-        
+
+        JButton loadParagraphButton = new JButton("Load Paragraph File");
+        loadParagraphButton.addActionListener(e -> {
+            logger.log("UI", "Load Paragraph File button pressed");
+            loadParagraphFile();
+        });
+        panel.add(loadParagraphButton);
+
         stepButton = new JButton("Single Step");
-        stepButton.addActionListener(e -> singleStep());
+        stepButton.addActionListener(e -> {
+            logger.log("UI", "Single Step button pressed");
+            singleStep();
+        });
         panel.add(stepButton);
-        
+
         runButton = new JButton("Run");
-        runButton.addActionListener(e -> run());
+        runButton.addActionListener(e -> {
+            logger.log("UI", "Run button pressed");
+            runAsync();
+        });
         panel.add(runButton);
-        
+
         JButton resetButton = new JButton("Reset");
-        resetButton.addActionListener(e -> reset());
+        resetButton.addActionListener(e -> {
+            logger.log("UI", "Reset button pressed");
+            reset();
+        });
         panel.add(resetButton);
-        
+
         JButton clearConsoleButton = new JButton("Clear Console");
-        clearConsoleButton.addActionListener(e -> clearConsole());
+        clearConsoleButton.addActionListener(e -> {
+            logger.log("UI", "Clear Console button pressed");
+            clearConsole();
+        });
         panel.add(clearConsoleButton);
-        
+
         return panel;
     }
 
-    private void loadProgram() {
+    private void setRunControls(boolean running) {
+        runInProgress = running;
+        iplButton.setEnabled(!running);
+        stepButton.setEnabled(!running);
+        runButton.setEnabled(!running);
+    }
+
+    private void promptForParagraphFile() {
         JFileChooser chooser = new JFileChooser(".");
-        if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
+        chooser.setDialogTitle("Select paragraph .txt file for card reader input");
+
+        if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
 
         File selected = chooser.getSelectedFile();
+        logger.log("UI", "Paragraph file chosen: " + selected.getAbsolutePath());
+
+        try {
+            simulator.loadTextFileIntoCardReader(selected.getAbsolutePath());
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Paragraph text file loaded into card reader input:\n" + selected.getName());
+            updateDisplays();
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Error loading paragraph text file: " + ex.getMessage());
+        }
+    }
+
+    private void loadParagraphFile() {
+        JFileChooser chooser = new JFileChooser(".");
+        if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+
+        File selected = chooser.getSelectedFile();
+        logger.log("UI", "Paragraph file chosen: " + selected.getAbsolutePath());
+
+        try {
+            simulator.loadTextFileIntoCardReader(selected.getAbsolutePath());
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Paragraph file loaded into card reader input:\n" + selected.getName());
+            updateDisplays();
+        } catch (Exception ex) {
+            logger.log("UI", "Error loading paragraph file: " + ex.getMessage());
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Error loading paragraph file: " + ex.getMessage());
+        }
+    }
+
+    private void loadProgram() {
+        logger.log("UI", "loadProgram() started");
+
+        JFileChooser chooser = new JFileChooser(".");
+        if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+
+        File selected = chooser.getSelectedFile();
+        logger.log("UI", "Program file chosen: " + selected.getAbsolutePath());
         String name = selected.getName().toLowerCase(Locale.ROOT);
 
         try {
             simulator.reset();
 
             if (name.endsWith(".asm")) {
-                // 1) Assemble source.asm -> Listing.txt + Load.txt
                 Assembler asm = new Assembler();
 
                 File listing = new File(selected.getParentFile(), "Listing.txt");
@@ -226,122 +311,174 @@ public class GUI extends JFrame {
                     return;
                 }
 
-                // 2) Load the generated Load.txt into memory
                 simulator.loadProgramFromFile(load.getAbsolutePath());
 
-                // 3) Set PC to the first generated address (better than hardcoding 020)
                 Integer entry = firstInstructionAddress(res.lines);
-                if (entry != null) simulator.setPC(entry);
+                if (entry != null) {
+                    simulator.setPC(entry);
+                }
 
-                JOptionPane.showMessageDialog(this,
-                        "Assembled + loaded.\n" +
-                        "Listing: " + listing.getName() + "\n" +
-                        "Load: " + load.getName() + "\n" +
-                        "PC set to: " + String.format("%04X", simulator.getCPU().getPC()));
-
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Assembled + loaded.\n"
+                                + "Listing: " + listing.getName() + "\n"
+                                + "Load: " + load.getName() + "\n"
+                                + "PC set to: " + String.format("%04X", simulator.getCPU().getPC()));
             } else {
-                // Assume it's already a Load.txt-style file (octal addr/value pairs)
                 simulator.loadProgramFromFile(selected.getAbsolutePath());
 
-                // Pick an entry policy; either keep your old default or set to first non-zero location.
-                simulator.setPC(20); // octal 20 (decimal 16) — Java octal literal
-                JOptionPane.showMessageDialog(this, "Loaded load-file.\nPC set to 0020(octal).");
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Loaded load-file.\nPC set to first loaded address: "
+                                + String.format("%04X", simulator.getCPU().getPC()));
             }
 
+            logger.log("UI", "Program load completed");
             updateDisplays();
 
+            if (name.contains("program2") || name.contains("prog2")) {
+                promptForParagraphFile();
+            }
+
         } catch (Exception ex) {
+            logger.log("UI", "Program load failed: " + ex.getMessage());
             JOptionPane.showMessageDialog(this, "Error loading program: " + ex.getMessage());
         }
     }
 
     private static Integer firstInstructionAddress(List<Assembler.AsmLine> lines) {
-        // Prefer the first actual instruction (not DATA/LOC).
-        // This prevents starting execution on DATA words like at LOC 6.
         for (Assembler.AsmLine al : lines) {
-            if (al.address == null || al.op == null) continue;
+            if (al.address == null || al.op == null) {
+                continue;
+            }
 
             String op = al.op.toUpperCase(Locale.ROOT);
+            if (op.equals("LOC") || op.equals("DATA")) {
+                continue;
+            }
 
-            // Skip directives / non-executable pseudo-ops
-            if (op.equals("LOC") || op.equals("DATA")) continue;
-
-            // Anything else here is an instruction mnemonic in your assembler.
             return al.address;
         }
 
-        // Fallback: if no instruction found, fall back to first generated word
         for (Assembler.AsmLine al : lines) {
-            if (al.address != null) return al.address;
+            if (al.address != null) {
+                return al.address;
+            }
         }
 
         return null;
     }
 
     private void singleStep() {
+        logger.log("UI", String.format("singleStep() called at PC=%04o", simulator.getCPU().getPC()));
         simulator.singleStep();
         updateDisplays();
         if (simulator.getCPU().isHalted()) {
+            logger.log("UI", "CPU halted after single step");
             JOptionPane.showMessageDialog(this, "Halted");
         }
     }
 
-    private void run() {
-        simulator.run(RUN_MAX_STEPS);
-        updateDisplays();
-        JOptionPane.showMessageDialog(this, simulator.getCPU().isHalted() ? "Halted" : "Stopped (max steps reached)");
+    private void runAsync() {
+        if (runInProgress) {
+            return;
+        }
+
+        logger.log("UI", "runAsync() started");
+        setRunControls(true);
+        refreshTimer.start();
+
+        runWorker = new SwingWorker<>() {
+            @Override
+            protected Void doInBackground() {
+                logger.log("UI", "Background run thread started");
+                simulator.run(RUN_MAX_STEPS);
+                return null;
+            }
+
+            @Override
+            protected void done() {
+                refreshTimer.stop();
+                updateDisplays();
+                setRunControls(false);
+
+                logger.log("UI", simulator.getCPU().isHalted()
+                        ? "Background run finished: halted"
+                        : "Background run finished: max steps reached");
+
+                JOptionPane.showMessageDialog(
+                        GUI.this,
+                        simulator.getCPU().isHalted()
+                                ? "Halted"
+                                : "Stopped (max steps reached)");
+            }
+        };
+
+        runWorker.execute();
     }
 
     private void reset() {
+        logger.log("UI", "reset() called");
         simulator.reset();
-        updateDisplays();
         clearConsole();
+        updateDisplays();
     }
-    
+
     private void sendInput() {
         String input = consoleInput.getText();
-        simulator.getCPU().setConsoleInput(input);
+        if (input == null || input.isEmpty()) {
+            logger.log("UI", "sendInput() ignored because input box was empty");
+            return;
+        }
+
+        logger.log("UI", "Search word submitted: [" + input + "]");
+        simulator.appendConsoleInput(input + "\n");
         consoleInput.setText("");
         updateDisplays();
     }
-    
+
     private void clearConsole() {
+        logger.log("UI", "clearConsole() called");
         consoleOutput.setText("");
-        simulator.getCPU().clearConsoleOutput();
+        simulator.clearConsoleOutput();
     }
 
     private void updateDisplays() {
         CPU cpu = simulator.getCPU();
-        
+
         for (int i = 0; i < 4; i++) {
             rDisplays[i].setText(String.format("%04X", cpu.getR(i)));
         }
-        
+
         for (int i = 1; i < 4; i++) {
             ixDisplays[i].setText(String.format("%04X", cpu.getIX(i)));
         }
-        
+
         pcDisplay.setText(String.format("%04X", cpu.getPC()));
         marDisplay.setText(String.format("%04X", cpu.getMAR()));
         mbrDisplay.setText(String.format("%04X", cpu.getMBR()));
         irDisplay.setText(String.format("%04X", cpu.getIR()));
-        
-        // Update CC display
+
         int cc = cpu.getCC();
         String ccStr = Integer.toBinaryString(0x10 | cc).substring(1) + " (";
-        if (cpu.getOverflow()) ccStr += "O";
-        if (cpu.getUnderflow()) ccStr += "U";
-        if (cpu.getDivZero()) ccStr += "D";
-        if (cpu.getEqualOrNot()) ccStr += "E";
-        if (cc == 0) ccStr += "-";
+        if (cpu.getOverflow())
+            ccStr += "O";
+        if (cpu.getUnderflow())
+            ccStr += "U";
+        if (cpu.getDivZero())
+            ccStr += "D";
+        if (cpu.getEqualOrNot())
+            ccStr += "E";
+        if (cc == 0)
+            ccStr += "-";
         ccStr += ")";
         ccDisplay.setText(ccStr);
-        
-        // Update console output
-        consoleOutput.setText(cpu.getConsoleOutput());
-        
+
+        mfrDisplay.setText(String.format("%X", cpu.getMFR()));
+        consoleOutput.setText(simulator.getConsoleOutput());
+
         updateCacheDisplay();
-        
+
         try {
             memAtMARDisplay.setText(String.format("%04X", simulator.getMemoryAtMAR()));
         } catch (Exception e) {
@@ -374,8 +511,6 @@ public class GUI extends JFrame {
     }
 
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> {
-            new GUI().setVisible(true);
-        });
+        SwingUtilities.invokeLater(() -> new GUI().setVisible(true));
     }
 }

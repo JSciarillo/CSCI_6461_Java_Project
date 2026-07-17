@@ -1,0 +1,5 @@
+[2026-04-19 22:10:52.793] [SYSTEM] Simulator created with memoryWords=2048 cacheLines=16
+[2026-04-19 22:10:52.804] [SIM] Reset requested
+[2026-04-19 22:10:52.807] [CPU] CPU reset: PC=0000 MAR=0000 MBR=000000 IR=000000 R0=000000 R1=000000 R2=000000 R3=000000 X1=000000 X2=000000 X3=000000 CC=0000 MFR=0
+[2026-04-19 22:10:52.807] [SIM] Reset complete: memory cleared, cache reset, fault handler initialized
+[2026-04-19 22:10:52.807] [UI] GUI created
